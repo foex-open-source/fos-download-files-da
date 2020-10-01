@@ -1,0 +1,7 @@
+
+
+.fos-dialog-file-info-tooltip.ui-tooltip{background:#1e2328;color:#fff;border:0;padding:0;opacity:1}.fos-dialog-file-info-tooltip .ui-tooltip-content{position:relative;padding:1em}.fos-dialog-file-info-tooltip .ui-tooltip-content::after{content:'';position:absolute;border-style:solid;display:block;width:0}.fos-dialog-file-info-tooltip.right .ui-tooltip-content::after{top:18px;left:-10px;border-color:transparent #1e2328;border-width:10px 10px 10px 0}.fos-dialog-file-info-tooltip.left .ui-tooltip-content::after{top:18px;right:-10px;border-color:transparent #1e2328;border-width:10px 0 10px 10px}.fos-dialog-file-info-tooltip.top .ui-tooltip-content::after{bottom:-10px;left:45%;border-color:#1e2328 transparent;border-width:10px 10px 0}.fos-dialog-file-info-tooltip.bottom .ui-tooltip-content::after{top:-10px;left:72px;border-color:#1e2328 transparent;border-width:0 10px 10px}
+/*# sourceMappingURL=style.css.map*/
+
+
+
