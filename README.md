@@ -4,7 +4,7 @@
 
 ![](https://img.shields.io/badge/Plug--in_Type-Dynamic_Action-orange.svg) ![](https://img.shields.io/badge/APEX-19.2-success.svg) ![](https://img.shields.io/badge/APEX-20.1-success.svg)
 
-Fetche and initialize the browser download of database-stored files.
+Download of database-stored BLOBs and CLOBs with a dynamic action. Multiple files are zipped automatically.
 <h4>Free Plug-in under MIT License</h4>
 <p>
 All FOS plug-ins are released under MIT License, which essentially means it is free for everyone to use, no matter if commercial or private use.
