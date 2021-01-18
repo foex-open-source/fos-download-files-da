@@ -1,5 +1,3 @@
-
-
 /* globals apex */
 
 var FOS = window.FOS || {};
@@ -445,6 +443,4 @@ FOS.utils = window.FOS.utils || {};
 		});
 	};
 })(apex.jQuery);
-
-
 

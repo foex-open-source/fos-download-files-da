@@ -1,5 +1,3 @@
-
-
 prompt --application/set_environment
 set define off verify off feedback off
 whenever sqlerror exit sql.sqlcode rollback
@@ -36,13 +34,14 @@ prompt APPLICATION 102 - FOS Dev - Plugin Master
 --   Manifest
 --     PLUGIN: 61118001090994374
 --     PLUGIN: 134108205512926532
+--     PLUGIN: 547902228942303344
 --     PLUGIN: 168413046168897010
 --     PLUGIN: 13235263798301758
 --     PLUGIN: 37441962356114799
 --     PLUGIN: 1846579882179407086
 --     PLUGIN: 8354320589762683
 --     PLUGIN: 50031193176975232
---     PLUGIN: 34175298479606152
+--     PLUGIN: 106296184223956059
 --     PLUGIN: 35822631205839510
 --     PLUGIN: 2674568769566617
 --     PLUGIN: 14934236679644451
@@ -50,6 +49,7 @@ prompt APPLICATION 102 - FOS Dev - Plugin Master
 --     PLUGIN: 2657630155025963
 --     PLUGIN: 284978227819945411
 --     PLUGIN: 56714461465893111
+--     PLUGIN: 98648032013264649
 --   Manifest End
 --   Version:         19.2.0.00.18
 --   Instance ID:     250144500186934
@@ -78,17 +78,25 @@ wwv_flow_api.create_plugin(
 '--',
 '-- =============================================================================',
 '',
-'-- globals & contants ',
+'-- globals & contants',
 'c_plugin_name                constant varchar2(100) := ''FOS - Download File(s)'';',
 'c_cookie_name                constant varchar2(100) := ''FOS_DOWNLOAD_FILE'';',
 'c_download_request           constant varchar2(100) := ''DOWNLOAD_FILES'';',
 '',
 'g_in_error_handling_callback boolean := false;',
 '',
+'procedure p',
+'  ( p_str in varchar2',
+'  )',
+'as',
+'begin',
+'    sys.htp.p(p_str);',
+'end p;',
+'',
 '-- helper function for converting clob to blob',
 'function clob_to_blob',
-'    ( p_clob clob',
-'    )',
+'  ( p_clob in clob',
+'  )',
 'return blob',
 'as',
 '    l_blob         blob;',
@@ -99,45 +107,46 @@ wwv_flow_api.create_plugin(
 '    l_warning      number := dbms_lob.warn_inconvertible_char;',
 'begin',
 '',
-'    if p_clob is null or dbms_lob.getlength(p_clob) = 0 then',
+'    if p_clob is null or dbms_lob.getlength(p_clob) = 0',
+'    then',
 '        dbms_lob.createtemporary',
-'            ( lob_loc => l_clob',
-'            , cache   => true',
-'            );',
+'          ( lob_loc => l_clob',
+'          , cache   => true',
+'          );',
 '    else',
 '        l_clob := p_clob;',
 '    end if;',
 '',
 '    dbms_lob.createtemporary',
-'        ( lob_loc => l_blob',
-'        , cache   => true',
-'        );',
+'      ( lob_loc => l_blob',
+'      , cache   => true',
+'      );',
 '',
 '    dbms_lob.converttoblob',
-'        ( dest_lob      => l_blob',
-'        , src_clob      => l_clob',
-'        , amount        => dbms_lob.lobmaxsize',
-'        , dest_offset   => l_dest_offset',
-'        , src_offset    => l_src_offset',
-'        , blob_csid     => dbms_lob.default_csid',
-'        , lang_context  => l_lang_context',
-'        , warning       => l_warning',
-'        );',
+'      ( dest_lob      => l_blob',
+'      , src_clob      => l_clob',
+'      , amount        => dbms_lob.lobmaxsize',
+'      , dest_offset   => l_dest_offset',
+'      , src_offset    => l_src_offset',
+'      , blob_csid     => dbms_lob.default_csid',
+'      , lang_context  => l_lang_context',
+'      , warning       => l_warning',
+'      );',
 '',
 '   return l_blob;',
-'end;',
+'end clob_to_blob;',
 '',
 '-- helper function for raising errors',
 'procedure raise_error',
-'    ( p_message varchar2',
-'    , p0        varchar2 default null',
-'    , p1        varchar2 default null',
-'    , p2        varchar2 default null',
-'    )',
+'  ( p_message in varchar2',
+'  , p0        in varchar2 default null',
+'  , p1        in varchar2 default null',
+'  , p2        in varchar2 default null',
+'  )',
 'as',
 'begin',
 '    raise_application_error(-20001, apex_string.format(c_plugin_name || '' - '' || p_message, p0, p1, p2));',
-'end;',
+'end raise_error;',
 '',
 '--------------------------------------------------------------------------------',
 '-- private function to include the apex error handling function, if one is',
@@ -147,645 +156,635 @@ wwv_flow_api.create_plugin(
 '  ( p_error in apex_error.t_error',
 '  )  return apex_error.t_error_result',
 'is',
-'  c_cr constant varchar2(1) := chr(10);',
-'',
 '  l_error_handling_function apex_application_pages.error_handling_function%type;',
 '  l_statement               varchar2(32767);',
 '  l_result                  apex_error.t_error_result;',
 '',
-'  procedure log_value (',
-'      p_attribute_name in varchar2,',
-'      p_old_value      in varchar2,',
-'      p_new_value      in varchar2 )',
+'  procedure log_value',
+'    ( p_attribute_name in varchar2',
+'    , p_old_value      in varchar2',
+'    , p_new_value      in varchar2',
+'    )',
 '  is',
 '  begin',
-'      if   p_old_value <> p_new_value',
-'        or (p_old_value is not null and p_new_value is null)',
-'        or (p_old_value is null     and p_new_value is not null)',
+'      if    p_old_value <> p_new_value',
+'         or (p_old_value is not null and p_new_value is null)',
+'         or (p_old_value is null     and p_new_value is not null)',
 '      then',
 '          apex_debug.info(''%s: %s'', p_attribute_name, p_new_value);',
 '      end if;',
 '  end log_value;',
+'',
 'begin',
-'  if not g_in_error_handling_callback ',
-'  then',
-'    g_in_error_handling_callback := true;',
-'',
-'    begin',
-'      select /*+ result_cache */',
-'             coalesce(p.error_handling_function, f.error_handling_function)',
-'        into l_error_handling_function',
-'        from apex_applications f,',
-'             apex_application_pages p',
-'       where f.application_id     = apex_application.g_flow_id',
-'         and p.application_id (+) = f.application_id',
-'         and p.page_id        (+) = apex_application.g_flow_step_id;',
-'    exception when no_data_found then',
-'        null;',
-'    end;',
-'  end if;',
-'',
-'  if l_error_handling_function is not null',
-'  then',
-'',
-'    l_statement := ''declare''||c_cr||',
-'                       ''l_error apex_error.t_error;''||c_cr||',
-'                   ''begin''||c_cr||',
-'                       ''l_error := apex_error.g_error;''||c_cr||',
-'                       ''apex_error.g_error_result := ''||l_error_handling_function||'' (''||c_cr||',
-'                           ''p_error => l_error );''||c_cr||',
-'                   ''end;'';',
-'',
-'    apex_error.g_error := p_error;',
-'',
-'    begin',
-'        apex_exec.execute_plsql (',
-'            p_plsql_code      => l_statement );',
-'    exception when others then',
-'        apex_debug.error(''error in error handler: %s'', sqlerrm);',
-'        apex_debug.error(''backtrace: %s'', dbms_utility.format_error_backtrace);',
-'    end;',
-'',
-'    l_result := apex_error.g_error_result;',
-'',
-'    if l_result.message is null',
+'    if not g_in_error_handling_callback',
 '    then',
-'        l_result.message          := nvl(l_result.message,          p_error.message);',
-'        l_result.additional_info  := nvl(l_result.additional_info,  p_error.additional_info);',
-'        l_result.display_location := nvl(l_result.display_location, p_error.display_location);',
-'        l_result.page_item_name   := nvl(l_result.page_item_name,   p_error.page_item_name);',
-'        l_result.column_alias     := nvl(l_result.column_alias,     p_error.column_alias);',
+'        g_in_error_handling_callback := true;',
+'',
+'        begin',
+'            select /*+ result_cache */',
+'                   coalesce(p.error_handling_function, f.error_handling_function)',
+'              into l_error_handling_function',
+'              from apex_applications f,',
+'                   apex_application_pages p',
+'             where f.application_id     = apex_application.g_flow_id',
+'               and p.application_id (+) = f.application_id',
+'               and p.page_id        (+) = apex_application.g_flow_step_id',
+'            ;',
+'        exception',
+'            when no_data_found then null;',
+'        end;',
 '    end if;',
-'  else',
-'    l_result.message          := p_error.message;',
-'    l_result.additional_info  := p_error.additional_info;',
-'    l_result.display_location := p_error.display_location;',
-'    l_result.page_item_name   := p_error.page_item_name;',
-'    l_result.column_alias     := p_error.column_alias;',
-'  end if;',
 '',
-'  if l_result.message = l_result.additional_info',
-'  then',
-'    l_result.additional_info := null;',
-'  end if;',
+'    if l_error_handling_function is not null',
+'    then',
 '',
-'  g_in_error_handling_callback := false;',
+'        l_statement := ''declare ''||',
+'                           ''l_error apex_error.t_error; ''||',
+'                       ''begin ''||',
+'                           ''l_error := apex_error.g_error; ''||',
+'                           ''apex_error.g_error_result := ''||l_error_handling_function||'' ( ''||',
+'                               ''p_error => l_error ); ''||',
+'                       ''end;'';',
 '',
-'  return l_result;',
+'        apex_error.g_error := p_error;',
 '',
-'exception',
-'  when others then',
-'    l_result.message             := ''custom apex error handling function failed !!'';',
-'    l_result.additional_info     := null;',
-'    l_result.display_location    := apex_error.c_on_error_page;',
-'    l_result.page_item_name      := null;',
-'    l_result.column_alias        := null;',
+'        begin',
+'            apex_exec.execute_plsql (',
+'                p_plsql_code      => l_statement );',
+'        exception when others then',
+'            apex_debug.error(''error in error handler: %s'', sqlerrm);',
+'            apex_debug.error(''backtrace: %s'', dbms_utility.format_error_backtrace);',
+'        end;',
+'',
+'        l_result := apex_error.g_error_result;',
+'',
+'        if l_result.message is null',
+'        then',
+'            l_result.message          := nvl(l_result.message,          p_error.message);',
+'            l_result.additional_info  := nvl(l_result.additional_info,  p_error.additional_info);',
+'            l_result.display_location := nvl(l_result.display_location, p_error.display_location);',
+'            l_result.page_item_name   := nvl(l_result.page_item_name,   p_error.page_item_name);',
+'            l_result.column_alias     := nvl(l_result.column_alias,     p_error.column_alias);',
+'        end if;',
+'    else',
+'        l_result.message          := p_error.message;',
+'        l_result.additional_info  := p_error.additional_info;',
+'        l_result.display_location := p_error.display_location;',
+'        l_result.page_item_name   := p_error.page_item_name;',
+'        l_result.column_alias     := p_error.column_alias;',
+'    end if;',
+'',
+'    if l_result.message = l_result.additional_info',
+'    then',
+'        l_result.additional_info := null;',
+'    end if;',
+'',
 '    g_in_error_handling_callback := false;',
+'',
 '    return l_result;',
 '',
+'exception',
+'    when others then',
+'        l_result.message             := ''custom apex error handling function failed !!'';',
+'        l_result.additional_info     := null;',
+'        l_result.display_location    := apex_error.c_on_error_page;',
+'        l_result.page_item_name      := null;',
+'        l_result.column_alias        := null;',
+'        g_in_error_handling_callback := false;',
+'        return l_result;',
 'end error_function_callback;',
 '',
 '-- file download handler',
 'procedure download_files',
-'  ( p_dynamic_action    apex_plugin.t_dynamic_action',
-'  , p_plugin            apex_plugin.t_plugin',
-'  , p_preview_download  boolean default false',
+'  ( p_dynamic_action    in apex_plugin.t_dynamic_action',
+'  , p_preview_download  in boolean default false',
 '  )',
 'as',
-'  --attributes',
-'  l_source_type             p_dynamic_action.attribute_01%type := p_dynamic_action.attribute_01;',
-'  l_is_mode_sql             boolean := (l_source_type = ''sql'');',
-'  l_is_mode_plsql           boolean := (l_source_type = ''plsql'');',
-'  ',
-'  l_sql_query               p_dynamic_action.attribute_02%type := p_dynamic_action.attribute_02;',
-'  l_plsql_code              p_dynamic_action.attribute_03%type := p_dynamic_action.attribute_03;',
-'  l_archive_name            p_dynamic_action.attribute_04%type := p_dynamic_action.attribute_04;',
-'  l_always_zip              boolean := (p_dynamic_action.attribute_15 like ''%always-zip%'');',
-'  l_additional_plsql_code   p_dynamic_action.attribute_06%type := p_dynamic_action.attribute_06;',
-'  l_content_disposition     p_dynamic_action.attribute_09%type := case when p_preview_download then ''attachment'' else nvl(p_dynamic_action.attribute_09, ''attachment'') end;',
+'    --attributes',
+'    l_source_type           p_dynamic_action.attribute_01%type := p_dynamic_action.attribute_01;',
+'    l_is_mode_plsql         boolean                            := (l_source_type = ''plsql'');',
 '',
-'  -- used by the sql mode',
-'  l_context    apex_exec.t_context;',
-'  ',
-'  l_pos_name   number;',
-'  l_pos_mime   number;',
-'  l_pos_blob   number;',
-'  l_pos_clob   number;',
-'  ',
-'  l_blob_col_exists boolean := false;',
-'  l_clob_col_exists boolean := false;',
-'  ',
-'  l_temp_file_name varchar2(1000);',
-'  l_temp_mime_type varchar2(1000);',
-'  l_temp_blob blob;',
-'  l_temp_clob clob;',
-'  ',
-'  -- column names expected in the sql mode',
-'  c_alias_file_name constant varchar2(20) := ''FILE_NAME'';',
-'  c_alias_mime_type constant varchar2(20) := ''FILE_MIME_TYPE'';',
-'  c_alias_blob      constant varchar2(20) := ''FILE_CONTENT_BLOB'';',
-'  c_alias_clob      constant varchar2(20) := ''FILE_CONTENT_CLOB'';',
+'    l_sql_query             p_dynamic_action.attribute_02%type := p_dynamic_action.attribute_02;',
+'    l_plsql_code            p_dynamic_action.attribute_03%type := p_dynamic_action.attribute_03;',
+'    l_archive_name          p_dynamic_action.attribute_04%type := p_dynamic_action.attribute_04;',
+'    l_always_zip            boolean                            := (p_dynamic_action.attribute_15 like ''%always-zip%'');',
+'    l_additional_plsql_code p_dynamic_action.attribute_06%type := p_dynamic_action.attribute_06;',
+'    l_content_disposition   p_dynamic_action.attribute_09%type := case when p_preview_download then ''attachment'' else nvl(p_dynamic_action.attribute_09, ''attachment'') end;',
 '',
-'  -- used by the plsql mode',
-'  c_collection_name constant varchar2(20) := ''FOS_DOWNLOAD_FILES'';',
-'  ',
-'  -- both modes',
-'  l_final_file      blob;',
-'  l_final_mime_type varchar2(1000);',
-'  l_final_file_name varchar2(1000);',
-'  ',
-'  l_file_count      number;',
-'  l_zipping         boolean;',
-'  ',
-'  procedure show_invalid_file_type_html',
-'  ( p_file_name in varchar2 default null',
-'  , p_mime_type in varchar2 default null',
-'  )',
-'  is',
-'    l_image_prefix VARCHAR2(4000);',
-'    l_theme_prefix VARCHAR2(4000);',
-'    --',
-'    function get_translated_message',
-'        ( p_id in varchar2',
-'        , p_null_value in varchar2',
-'        ) return varchar2',
+'    -- used by the sql mode',
+'    l_context               apex_exec.t_context;',
+'',
+'    l_pos_name              number;',
+'    l_pos_mime              number;',
+'    l_pos_blob              number;',
+'    l_pos_clob              number;',
+'',
+'    l_blob_col_exists       boolean := false;',
+'    l_clob_col_exists       boolean := false;',
+'',
+'    l_temp_file_name        varchar2(1000);',
+'    l_temp_mime_type        varchar2(1000);',
+'    l_temp_blob             blob;',
+'    l_temp_clob             clob;',
+'',
+'    -- column names expected in the sql mode',
+'    c_alias_file_name       constant varchar2(20) := ''FILE_NAME'';',
+'    c_alias_mime_type       constant varchar2(20) := ''FILE_MIME_TYPE'';',
+'    c_alias_blob            constant varchar2(20) := ''FILE_CONTENT_BLOB'';',
+'    c_alias_clob            constant varchar2(20) := ''FILE_CONTENT_CLOB'';',
+'',
+'    -- used by the plsql mode',
+'    c_collection_name       constant varchar2(20) := ''FOS_DOWNLOAD_FILES'';',
+'',
+'    -- both modes',
+'    l_final_file            blob;',
+'    l_final_mime_type       varchar2(1000);',
+'    l_final_file_name       varchar2(1000);',
+'',
+'    l_file_count            number;',
+'    l_zipping               boolean;',
+'',
+'    procedure show_invalid_file_type_html',
 '    is',
-'        l_message varchar2(4000);',
+'      l_image_prefix varchar2(4000);',
+'      l_theme_prefix varchar2(4000);',
+'      --',
+'      function get_translated_message',
+'          ( p_id         in varchar2',
+'          , p_null_value in varchar2',
+'          ) return varchar2',
+'      is',
+'          l_message varchar2(4000);',
+'      begin',
+'          l_message := apex_lang.message(p_name => p_id, p_application_id => nv(''APP_ID''));',
+'          return case when l_message = p_id then p_null_value else nvl(l_message, p_null_value) end;',
+'      end get_translated_message;',
+'',
 '    begin',
-'        l_message := apex_lang.message(p_name => p_id, p_application_id => nv(''APP_ID''));',
-'        return case when l_message = p_id then p_null_value else nvl(l_message, p_null_value) end;',
-'    end get_translated_message;',
-'    ',
-'  begin',
-'    l_image_prefix := apex_plugin_util.replace_substitutions(''#IMAGE_PREFIX#'');',
-'    l_theme_prefix := apex_plugin_util.replace_substitutions(''#THEME_IMAGES#'');',
-'    sys.htp.p(''<html>'');',
-'    sys.htp.p(''<head>'');',
-'    sys.htp.p(''<meta http-equiv="x-ua-compatible" content="IE=edge" />'');',
-'    sys.htp.p(''<meta charset="utf-8">'');',
-'    sys.htp.p(''<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />'');',
-'    sys.htp.p(''<meta http-equiv="Pragma" content="no-cache" />'');',
-'    sys.htp.p(''<meta http-equiv="Expires" content="-1" />'');',
-'    sys.htp.p(''<meta http-equiv="Cache-Control" content="no-cache" />'');',
-'    sys.htp.p(''<meta name="viewport" content="width=device-width, initial-scale=1.0" />'');',
-'    sys.htp.p(''<link rel="stylesheet" href="''||l_image_prefix||''libraries/font-apex/2.1/css/font-apex.min.css" type="text/css" />'');',
-'    sys.htp.p(''<link rel="stylesheet" href="''||l_theme_prefix||''css/core/Alert.css" type="text/css" />'');',
-'    sys.htp.p(''<link rel="stylesheet" href="''||l_theme_prefix||''css/core/Icon.css" type="text/css" />'');',
-'    sys.htp.p(''<style>body {font: 500 13px/19px "Open Sans", "Helvetica Neue", helvetica, arial, verdana, sans-serif;}'');',
-'    sys.htp.p(''.t-Alert--warning .t-Alert-icon .fa-Icon {color: #FBCE4A;font-size:64px;}'');',
-'    sys.htp.p(''.t-Alert--defaultIcons.t-Alert--warning .t-Alert-icon .fa-Icon:before{content: "\f071";}'');',
-'    sys.htp.p(''.t-Alert--wizard .t-Alert-body{text-align:center}'');',
-'    sys.htp.p(''.t-Alert--horizontal, .t-Alert--wizard {border: none !important;box-shadow:none}</style>'');',
-'    sys.htp.p(''</head>'');',
-'    sys.htp.p(''<body>'');',
-'    sys.htp.p(''<div class="t-Alert t-Alert--wizard t-Alert--defaultIcons t-Alert--warning">'');',
-'    sys.htp.p(''<div class="t-Alert-wrap">'');',
-'    sys.htp.p(''<div class="t-Alert-icon">'');',
-'    sys.htp.p(''<span class="fa-Icon fa fa-warning"></span>'');',
-'    sys.htp.p(''</div>'');',
-'    sys.htp.p(''<div class="t-Alert-content">'');',
-'    sys.htp.p(''<div class="t-Alert-header">'');',
-'    sys.htp.p(''<h2 class="t-Alert-title">''||get_translated_message(p_id => ''FOS.DOWNLOAD.PREVIEW_NA.TITLE'', p_null_value => ''Preview not available!'')||''</h2>'');',
-'    sys.htp.p(''</div>'');',
-'    sys.htp.p(''<div class="t-Alert-body">''||get_translated_message(p_id => ''FOS.DOWNLOAD.PREVIEW_NA.MESSAGE'', p_null_value => ''The file cannot be previewed. Please download and open it on your device.'')||''</div>'');',
-'    sys.htp.p(''</div>'');',
-'    sys.htp.p(''<div class="t-Alert-buttons"></div>'');',
-'    sys.htp.p(''</div>'');',
-'    sys.htp.p(''</div>'');',
-'    sys.htp.p(''</body>'');',
-'    sys.htp.p(''</html>'');',
-'    sys.htp.p('''');',
-'  end show_invalid_file_type_html;',
-'  ',
-'  function is_allowed_preview_type',
-'  ( p_mime_type in varchar2',
-'  ) return boolean',
-'  is',
-'  begin',
-'    return p_mime_type in (''application/pdf'',''application/json'',''application/xml'') or p_mime_type like ''image/%'' or p_mime_type like ''text/%'';',
-'  end is_allowed_preview_type;',
-'  ',
+'        l_image_prefix := apex_plugin_util.replace_substitutions(''#IMAGE_PREFIX#'');',
+'        l_theme_prefix := apex_plugin_util.replace_substitutions(''#THEME_IMAGES#'');',
+'        p(''<html><head>'');',
+'        p(''<meta http-equiv="x-ua-compatible" content="IE=edge" />'');',
+'        p(''<meta charset="utf-8">'');',
+'        p(''<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />'');',
+'        p(''<meta http-equiv="Pragma" content="no-cache" />'');',
+'        p(''<meta http-equiv="Expires" content="-1" />'');',
+'        p(''<meta http-equiv="Cache-Control" content="no-cache" />'');',
+'        p(''<meta name="viewport" content="width=device-width, initial-scale=1.0" />'');',
+'        p(''<link rel="stylesheet" href="''||l_image_prefix||''libraries/font-apex/2.1/css/font-apex.min.css" type="text/css" />'');',
+'        p(''<link rel="stylesheet" href="''||l_theme_prefix||''css/core/Alert.css" type="text/css" />'');',
+'        p(''<link rel="stylesheet" href="''||l_theme_prefix||''css/core/Icon.css" type="text/css" />'');',
+'        p(''<style>body {font: 500 13px/19px "Open Sans", "Helvetica Neue", helvetica, arial, verdana, sans-serif;}'');',
+'        p(''.t-Alert--warning .t-Alert-icon .fa-Icon {color: #FBCE4A;font-size:64px;}'');',
+'        p(''.t-Alert--defaultIcons.t-Alert--warning .t-Alert-icon .fa-Icon:before{content: "\f071";}'');',
+'        p(''.t-Alert--wizard .t-Alert-body{text-align:center}'');',
+'        p(''.t-Alert--horizontal, .t-Alert--wizard {border: none !important;box-shadow:none}</style>'');',
+'        p(''</head><body>'');',
+'        p(''<div class="t-Alert t-Alert--wizard t-Alert--defaultIcons t-Alert--warning">'');',
+'        p(''<div class="t-Alert-wrap">'');',
+'        p(''<div class="t-Alert-icon">'');',
+'        p(''<span class="fa-Icon fa fa-warning"></span>'');',
+'        p(''</div>'');',
+'        p(''<div class="t-Alert-content"><div class="t-Alert-header">'');',
+'        p(''<h2 class="t-Alert-title">''||get_translated_message(p_id => ''FOS.DOWNLOAD.PREVIEW_NA.TITLE'', p_null_value => ''Preview not available!'')||''</h2>'');',
+'        p(''</div>'');',
+'        p(''<div class="t-Alert-body">''||get_translated_message(p_id => ''FOS.DOWNLOAD.PREVIEW_NA.MESSAGE'', p_null_value => ''The file cannot be previewed. Please download and open it on your device.'')||''</div>'');',
+'        p(''</div><div class="t-Alert-buttons"></div></div></div></body></html>'');',
+'        p('''');',
+'    end show_invalid_file_type_html;',
+'',
+'    function is_allowed_preview_type',
+'      ( p_mime_type in varchar2',
+'      ) return boolean',
+'    is',
+'    begin',
+'        return p_mime_type in (''application/pdf'',''application/json'',''application/xml'') or p_mime_type like ''image/%'' or p_mime_type like ''text/%'';',
+'    end is_allowed_preview_type;',
+'',
 'begin',
-'  ',
-'  --',
-'  -- When we open in a new window the disposition must be inline',
-'  --',
-'  if l_content_disposition = ''window'' then',
-'    l_content_disposition := ''inline'';',
-'  end if;',
-'  ',
-'  -- creating a sql query based on the collection so we can reuse the logic for the sql mode',
-'  if l_is_mode_plsql',
-'  then',
-'    apex_collection.create_or_truncate_collection(c_collection_name);',
-'    apex_exec.execute_plsql(l_plsql_code);',
-'    l_sql_query := ''',
-'        select c001    as file_name',
-'             , c002    as file_mime_type',
-'             , blob001 as file_content_blob',
-'             , clob001 as file_content_clob',
-'          from apex_collections',
-'         where collection_name = '''''' || c_collection_name || '''''''';',
-'  end if;',
-'',
-'  l_context := apex_exec.open_query_context',
-'      ( p_location          => apex_exec.c_location_local_db',
-'      , p_sql_query         => l_sql_query',
-'      , p_total_row_count   => true',
-'      );',
-'',
-'  l_file_count := apex_exec.get_total_row_count(l_context);',
-'',
-'  if l_file_count = 0',
-'  then',
-'      raise_error(''At least 1 file must be provided'');',
-'  end if;',
-'',
-'  -- we zip if there are more than 1 file or if always zip is turned on',
-'  l_zipping := ((l_file_count > 1) or l_always_zip);',
-'',
-'  -- result set sanity checks',
-'  begin',
-'    l_pos_name := apex_exec.get_column_position',
-'      ( p_context     => l_context',
-'      , p_column_name => c_alias_file_name',
-'      , p_is_required => true',
-'      , p_data_type   => apex_exec.c_data_type_varchar2',
-'      );',
-'  exception',
-'      when others then',
-'          raise_error(''A %s column must be defined'', c_alias_file_name);',
-'  end;',
-'',
-'  begin',
-'    l_pos_mime := apex_exec.get_column_position',
-'      ( p_context     => l_context',
-'      , p_column_name => c_alias_mime_type',
-'      , p_is_required => true',
-'      , p_data_type   => apex_exec.c_data_type_varchar2',
-'      );',
-'  exception',
-'      when others then',
-'          raise_error(''A %s column must be defined'', c_alias_mime_type);',
-'  end;',
-'',
-'  -- looping through all columns as opposed to using get_column_position',
-'  -- as get_column_position writes an error to the logs if the column is not found',
-'  -- even if the exception is handled',
-'  l_blob_col_exists := false;',
-'  l_clob_col_exists := false;',
-'  for idx in 1 .. apex_exec.get_column_count(l_context)',
-'  loop',
-'    if apex_exec.get_column(l_context, idx).name = c_alias_blob',
+'    -- When we open in a new window the disposition must be inline',
+'    if l_content_disposition = ''window''',
 '    then',
-'      l_pos_blob := idx;',
-'      l_blob_col_exists := true;',
-'    end if;',
-'    if apex_exec.get_column(l_context, idx).name = c_alias_clob',
-'    then',
-'      l_pos_clob := idx;',
-'      l_clob_col_exists := true;',
-'    end if;',
-'  end loop;',
-'',
-'  -- raise an error if neither a blob nor a clob source was provided',
-'  if not (l_blob_col_exists or l_clob_col_exists)',
-'  then',
-'    raise_error(''Either a %s or a %s column must be defined'', c_alias_blob, c_alias_clob);',
-'  end if;',
-'',
-'  -- looping through all files',
-'  while apex_exec.next_row(l_context)',
-'  loop',
-'',
-'    if l_blob_col_exists',
-'    then',
-'      l_temp_blob := apex_exec.get_blob(l_context, l_pos_blob);',
-'      if l_temp_blob is null',
-'      then',
-'        l_temp_blob := empty_blob();',
-'      end if;',
+'        l_content_disposition := ''inline'';',
 '    end if;',
 '',
-'    if l_clob_col_exists',
+'    -- creating a sql query based on the collection so we can reuse the logic for the sql mode',
+'    if l_is_mode_plsql',
 '    then',
-'      l_temp_clob := apex_exec.get_clob(l_context, l_pos_clob);',
-'      if l_temp_clob is null',
-'      then',
-'        l_temp_clob := empty_clob();',
-'      end if;',
+'        apex_collection.create_or_truncate_collection(c_collection_name);',
+'        apex_exec.execute_plsql(l_plsql_code);',
+'        l_sql_query := ''',
+'            select c001    as file_name',
+'                 , c002    as file_mime_type',
+'                 , blob001 as file_content_blob',
+'                 , clob001 as file_content_clob',
+'              from apex_collections',
+'             where collection_name = '''''' || c_collection_name || '''''''';',
 '    end if;',
-'    ',
-'    l_temp_file_name := apex_exec.get_varchar2(l_context, l_pos_name);',
-'    l_temp_mime_type := apex_exec.get_varchar2(l_context, l_pos_mime);',
 '',
-'    -- logic for choosing between the blob an clob',
-'    if (l_blob_col_exists and not l_clob_col_exists)',
-'    or (l_blob_col_exists and l_clob_col_exists and dbms_lob.getlength(l_temp_blob) > 0) ',
+'    l_context := apex_exec.open_query_context',
+'                   ( p_location          => apex_exec.c_location_local_db',
+'                   , p_sql_query         => l_sql_query',
+'                   , p_total_row_count   => true',
+'                   )',
+'    ;',
+'',
+'    l_file_count := apex_exec.get_total_row_count(l_context);',
+'',
+'    if l_file_count = 0',
 '    then',
-'      if apex_application.g_debug',
-'      then',
-'        apex_debug.message(''%s - BLOB - %s bytes'', l_temp_file_name, dbms_lob.getlength(l_temp_blob));',
-'      end if;',
-'      if l_zipping',
-'      then',
-'        apex_zip.add_file',
-'          ( p_zipped_blob => l_final_file',
-'          , p_file_name   => l_temp_file_name',
-'          , p_content     => l_temp_blob',
-'          );',
-'      else',
-'        -- there''s only 1 file in the result set',
-'        l_final_file_name := l_temp_file_name;',
-'        l_final_mime_type := l_temp_mime_type;',
-'        l_final_file      := l_temp_blob;',
-'      end if;',
+'        raise_error(''At least 1 file must be provided'');',
+'    end if;',
+'',
+'    -- we zip if there are more than 1 file or if always zip is turned on',
+'    l_zipping := ((l_file_count > 1) or l_always_zip);',
+'',
+'    -- result set sanity checks',
+'    begin',
+'        l_pos_name := apex_exec.get_column_position',
+'                        ( p_context     => l_context',
+'                        , p_column_name => c_alias_file_name',
+'                        , p_is_required => true',
+'                        , p_data_type   => apex_exec.c_data_type_varchar2',
+'                        );',
+'    exception',
+'        when others then',
+'            raise_error(''A %s column must be defined'', c_alias_file_name);',
+'    end;',
+'',
+'    begin',
+'        l_pos_mime := apex_exec.get_column_position',
+'                        ( p_context     => l_context',
+'                        , p_column_name => c_alias_mime_type',
+'                        , p_is_required => true',
+'                        , p_data_type   => apex_exec.c_data_type_varchar2',
+'                        );',
+'    exception',
+'        when others then',
+'            raise_error(''A %s column must be defined'', c_alias_mime_type);',
+'    end;',
+'',
+'    -- looping through all columns as opposed to using get_column_position',
+'    -- as get_column_position writes an error to the logs if the column is not found',
+'    -- even if the exception is handled',
+'    l_blob_col_exists := false;',
+'    l_clob_col_exists := false;',
+'    for idx in 1 .. apex_exec.get_column_count(l_context)',
+'    loop',
+'        if apex_exec.get_column(l_context, idx).name = c_alias_blob',
+'        then',
+'            l_pos_blob := idx;',
+'            l_blob_col_exists := true;',
+'        end if;',
+'',
+'        if apex_exec.get_column(l_context, idx).name = c_alias_clob',
+'        then',
+'            l_pos_clob := idx;',
+'            l_clob_col_exists := true;',
+'        end if;',
+'    end loop;',
+'',
+'    -- raise an error if neither a blob nor a clob source was provided',
+'    if not (l_blob_col_exists or l_clob_col_exists)',
+'    then',
+'        raise_error(''Either a %s or a %s column must be defined'', c_alias_blob, c_alias_clob);',
+'    end if;',
+'',
+'    -- looping through all files',
+'    while apex_exec.next_row(l_context)',
+'    loop',
+'        if l_blob_col_exists',
+'        then',
+'            l_temp_blob := apex_exec.get_blob(l_context, l_pos_blob);',
+'            if l_temp_blob is null',
+'            then',
+'              l_temp_blob := empty_blob();',
+'            end if;',
+'        end if;',
+'',
+'        if l_clob_col_exists',
+'        then',
+'            l_temp_clob := apex_exec.get_clob(l_context, l_pos_clob);',
+'            if l_temp_clob is null',
+'            then',
+'              l_temp_clob := empty_clob();',
+'            end if;',
+'        end if;',
+'',
+'        l_temp_file_name := apex_exec.get_varchar2(l_context, l_pos_name);',
+'        l_temp_mime_type := apex_exec.get_varchar2(l_context, l_pos_mime);',
+'',
+'        -- logic for choosing between the blob an clob',
+'        if    (l_blob_col_exists and not l_clob_col_exists)',
+'           or (l_blob_col_exists and     l_clob_col_exists and dbms_lob.getlength(l_temp_blob) > 0)',
+'        then',
+'            if apex_application.g_debug',
+'            then',
+'                apex_debug.message(''%s - BLOB - %s bytes'', l_temp_file_name, dbms_lob.getlength(l_temp_blob));',
+'            end if;',
+'',
+'            if l_zipping',
+'            then',
+'                apex_zip.add_file',
+'                  ( p_zipped_blob => l_final_file',
+'                  , p_file_name   => l_temp_file_name',
+'                  , p_content     => l_temp_blob',
+'                  );',
+'            else',
+'                -- there''s only 1 file in the result set',
+'                l_final_file_name := l_temp_file_name;',
+'                l_final_mime_type := l_temp_mime_type;',
+'                l_final_file      := l_temp_blob;',
+'            end if;',
+'        else',
+'            if apex_application.g_debug',
+'            then',
+'                apex_debug.message(''%s - CLOB - %s bytes'', l_temp_file_name, dbms_lob.getlength(l_temp_clob));',
+'            end if;',
+'',
+'            if l_zipping',
+'            then',
+'                apex_zip.add_file',
+'                  ( p_zipped_blob => l_final_file',
+'                  , p_file_name   => l_temp_file_name',
+'                  , p_content     => clob_to_blob(l_temp_clob)',
+'                  );',
+'            else',
+'                -- there''s only 1 file in the result set',
+'                l_final_file_name := l_temp_file_name;',
+'                l_final_mime_type := l_temp_mime_type;',
+'                l_final_file      := clob_to_blob(l_temp_clob);',
+'            end if;',
+'        end if;',
+'    end loop;',
+'',
+'    apex_exec.close(l_context);',
+'',
+'    if l_is_mode_plsql',
+'    then',
+'        apex_collection.delete_collection(c_collection_name);',
+'    end if;',
+'',
+'    if l_zipping',
+'    then',
+'        apex_zip.finish(l_final_file);',
+'        if l_file_count = 1',
+'        then',
+'            l_final_file_name := nvl(apex_application.g_x01, nvl(l_archive_name, l_temp_file_name || ''.zip''));',
+'        else',
+'            l_final_file_name := nvl(apex_application.g_x01, nvl(l_archive_name, ''files.zip''));',
+'        end if;',
+'',
+'        l_final_mime_type := ''application/zip'';',
+'',
+'        if l_final_file_name not like ''%.zip''',
+'        then',
+'            l_final_file_name := l_final_file_name || ''.zip'';',
+'        end if;',
+'    end if;',
+'',
+'    if l_additional_plsql_code is not null',
+'    then',
+'        apex_exec.execute_plsql(''begin ''||l_additional_plsql_code||'' commit; end;'');',
+'    end if;',
+'',
+'    if          l_content_disposition = ''inline''',
+'        and not is_allowed_preview_type(l_final_mime_type)',
+'    then',
+'        show_invalid_file_type_html;',
 '    else',
-'      if apex_application.g_debug',
-'      then',
-'        apex_debug.message(''%s - CLOB - %s bytes'', l_temp_file_name, dbms_lob.getlength(l_temp_clob));',
-'      end if;',
-'      if l_zipping',
-'      then',
-'        apex_zip.add_file',
-'          ( p_zipped_blob => l_final_file',
-'          , p_file_name   => l_temp_file_name',
-'          , p_content     => clob_to_blob(l_temp_clob)',
+'        sys.htp.init;',
+'        sys.owa_util.mime_header(l_final_mime_type, false);',
+'        --',
+'        -- We send a cookie so we can determine when a file has been downloaded',
+'        -- https://stackoverflow.com/questions/1106377/detect-when-browser-receives-file-download',
+'        owa_cookie.send',
+'          ( name    => apex_application.g_x10',
+'          , value   => ''{"count":''||l_file_count||'',"name":"''||apex_escape.json(l_final_file_name)||''","mimeType":"''||apex_escape.json(l_final_mime_type)||''","size":"''||trim(apex_escape.json(apex_util.filesize_mask(dbms_lob.getlength(l_final_file))))'
+||'||''"}''',
+'          , expires => sysdate + 2/1440',
 '          );',
-'      else',
-'        -- there''s only 1 file in the result set',
-'        l_final_file_name := l_temp_file_name;',
-'        l_final_mime_type := l_temp_mime_type;',
-'        l_final_file      := clob_to_blob(l_temp_clob);',
-'      end if;',
+'        p(''Content-Length: '' || dbms_lob.getlength(l_final_file));',
+'        p(''Content-Disposition: ''||l_content_disposition||''; filename="'' || l_final_file_name || ''";'');',
+'        sys.owa_util.http_header_close;',
+'',
+'        sys.wpg_docload.download_file(l_final_file);',
+'        apex_application.stop_apex_engine;',
 '    end if;',
-'  end loop;',
-'',
-'  apex_exec.close(l_context);',
-'  ',
-'  if l_is_mode_plsql',
-'  then',
-'      apex_collection.delete_collection(c_collection_name);',
-'  end if;',
-'',
-'  if l_zipping',
-'  then',
-'    apex_zip.finish(l_final_file);',
-'    if l_file_count = 1 then',
-'      l_final_file_name := nvl(apex_application.g_x01, nvl(l_archive_name, l_temp_file_name || ''.zip''));',
-'    else',
-'      l_final_file_name := nvl(apex_application.g_x01, nvl(l_archive_name, ''files.zip''));',
-'    end if;',
-'    ',
-'    l_final_mime_type := ''application/zip'';',
-'    ',
-'    if l_final_file_name not like ''%.zip'' then',
-'      l_final_file_name := l_final_file_name || ''.zip'';',
-'    end if;',
-'  end if;',
-'',
-'  if l_additional_plsql_code is not null then',
-'    apex_exec.execute_plsql(''begin ''||l_additional_plsql_code||'' commit; end;'');',
-'  end if;',
-'',
-'  if  l_content_disposition = ''inline'' and not is_allowed_preview_type(l_final_mime_type) then',
-'    show_invalid_file_type_html;',
-'  else',
-'    sys.htp.init;',
-'    sys.owa_util.mime_header(l_final_mime_type, false);',
-'    --',
-'    -- We send a cookie so we can determine when a file has been downloaded',
-'    -- https://stackoverflow.com/questions/1106377/detect-when-browser-receives-file-download',
-'    owa_cookie.send',
-'      ( name    => apex_application.g_x10',
-'      , value   => ''{"count":''||l_file_count||'',"name":"''||apex_escape.json(l_final_file_name)||''","mimeType":"''||apex_escape.json(l_final_mime_type)||''","size":"''||trim(apex_escape.json(apex_util.filesize_mask(dbms_lob.getlength(l_final_file))))||''"'
-||'}''',
-'      , expires => sysdate + 2/1440',
-'      );',
-'    sys.htp.p(''Content-Length: '' || dbms_lob.getlength(l_final_file));',
-'    sys.htp.p(''Content-Disposition: ''||l_content_disposition||''; filename="'' || l_final_file_name || ''";'');',
-'    sys.owa_util.http_header_close;',
-'',
-'    sys.wpg_docload.download_file(l_final_file);',
-'    apex_application.stop_apex_engine;',
-'  end if;',
 'exception',
 '  -- this is the exception thrown by stop_apex_engine',
 '  -- catching it here so it won''t be handled by the others handlers',
 '  when apex_application.e_stop_apex_engine then',
-'    raise;',
+'      raise;',
 '  when others then',
-'    -- delete the collection in case the error occurred between opening and closing it',
-'    if apex_collection.collection_exists(c_collection_name)',
-'    then',
-'        apex_collection.delete_collection(c_collection_name);',
-'    end if;',
-'    -- always close the context in case of an error',
-'    apex_exec.close(l_context);',
-'    raise;',
+'      -- delete the collection in case the error occurred between opening and closing it',
+'      if apex_collection.collection_exists(c_collection_name)',
+'      then',
+'          apex_collection.delete_collection(c_collection_name);',
+'      end if;',
+'      -- always close the context in case of an error',
+'      apex_exec.close(l_context);',
+'      raise;',
 'end download_files;',
 '',
 '--------------------------------------------------------------------------------',
 '-- Main plug-in render function',
 '--------------------------------------------------------------------------------',
 'function render',
-'  ( p_dynamic_action apex_plugin.t_dynamic_action',
-'  , p_plugin         apex_plugin.t_plugin',
+'  ( p_dynamic_action in apex_plugin.t_dynamic_action',
+'  , p_plugin         in apex_plugin.t_plugin',
 '  )',
 'return apex_plugin.t_dynamic_action_render_result',
 'as',
-'  l_result apex_plugin.t_dynamic_action_render_result;',
+'    l_result                 apex_plugin.t_dynamic_action_render_result;',
 '',
-'  --general attributes',
-'  l_ajax_identifier          varchar2(4000)                     := apex_plugin.get_ajax_identifier;',
-'  l_static_id                varchar2(4000)                     := nvl(p_dynamic_action.attribute_07, p_dynamic_action.id);',
-'  l_suppress_errors          boolean                            := (p_dynamic_action.attribute_15 like ''%suppress-error-messages%'');',
-'  l_content_disposition      p_dynamic_action.attribute_09%type := nvl(p_dynamic_action.attribute_09, ''download'');',
-'  ',
-'  -- spinner settings',
-'  l_show_spinner             boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner'') > 0;',
-'  l_show_spinner_overlay     boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner-overlay'') > 0;',
-'  l_show_spinner_on_region   boolean                            := instr(p_dynamic_action.attribute_15, ''spinner-position'') > 0;',
-'      ',
-'  -- page items to submit settings',
-'  l_items_to_submit          varchar2(4000)                    := apex_plugin_util.page_item_names_to_jquery(p_dynamic_action.attribute_05);',
+'    --general attributes',
+'    l_ajax_identifier        varchar2(4000)                     := apex_plugin.get_ajax_identifier;',
+'    l_static_id              varchar2(4000)                     := nvl(p_dynamic_action.attribute_07, p_dynamic_action.id);',
+'    l_suppress_errors        boolean                            := (p_dynamic_action.attribute_15 like ''%suppress-error-messages%'');',
+'    l_content_disposition    p_dynamic_action.attribute_09%type := nvl(p_dynamic_action.attribute_09, ''download'');',
 '',
-'  -- Javascript Initialization Code',
-'  l_init_js_fn               varchar2(32767)                    := nvl(apex_plugin_util.replace_substitutions(p_dynamic_action.init_javascript_code), ''undefined'');',
-'  ',
+'    -- spinner settings',
+'    l_show_spinner           boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner'') > 0;',
+'    l_show_spinner_overlay   boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner-overlay'') > 0;',
+'    l_show_spinner_on_region boolean                            := instr(p_dynamic_action.attribute_15, ''spinner-position'') > 0;',
+'',
+'    -- page items to submit settings',
+'    l_items_to_submit        varchar2(4000)                     := apex_plugin_util.page_item_names_to_jquery(p_dynamic_action.attribute_05);',
+'',
+'    -- Javascript Initialization Code',
+'    l_init_js_fn             varchar2(32767)                    := nvl(apex_plugin_util.replace_substitutions(p_dynamic_action.init_javascript_code), ''undefined'');',
+'',
 'begin',
+'    if apex_application.g_debug',
+'    then',
+'        apex_plugin_util.debug_dynamic_action',
+'          ( p_dynamic_action => p_dynamic_action',
+'          , p_plugin         => p_plugin',
+'          );',
+'    end if;',
 '',
-'  if apex_application.g_debug then',
-'    apex_plugin_util.debug_dynamic_action',
-'      ( p_dynamic_action => p_dynamic_action',
-'      , p_plugin         => p_plugin',
-'      );',
-'  end if;        ',
-'  ',
-'  -- create a json object holding the dynamic action settings',
-'  apex_json.initialize_clob_output;',
-'  apex_json.open_object;',
-'  apex_json.write(''id''                   , p_dynamic_action.id);',
-'  apex_json.write(''staticId''             , l_static_id);',
-'  apex_json.write(''ajaxIdentifier''       , l_ajax_identifier);',
-'  apex_json.write(''itemsToSubmit''        , l_items_to_submit);',
-'  apex_json.write(''suppressErrorMessages'', l_suppress_errors);    ',
-'  apex_json.write(''previewMode''          , l_content_disposition = ''inline'');',
-'  apex_json.write(''newWindow''            , l_content_disposition = ''window'');',
+'    -- create a json object holding the dynamic action settings',
+'    apex_json.initialize_clob_output;',
+'    apex_json.open_object;',
+'    apex_json.write(''id''                   , p_dynamic_action.id);',
+'    apex_json.write(''staticId''             , l_static_id);',
+'    apex_json.write(''ajaxIdentifier''       , l_ajax_identifier);',
+'    apex_json.write(''itemsToSubmit''        , l_items_to_submit);',
+'    apex_json.write(''suppressErrorMessages'', l_suppress_errors);',
+'    apex_json.write(''previewMode''          , l_content_disposition = ''inline'');',
+'    apex_json.write(''newWindow''            , l_content_disposition = ''window'');',
 '',
-'  apex_json.open_object(''spinnerSettings'');',
-'  apex_json.write(''showSpinner''          , l_show_spinner);',
-'  apex_json.write(''showSpinnerOverlay''   , l_show_spinner_overlay);',
-'  apex_json.write(''showSpinnerOnRegion''  , l_show_spinner_on_region);',
-'  apex_json.close_object;',
+'    apex_json.open_object(''spinnerSettings'');',
+'    apex_json.write(''showSpinner''          , l_show_spinner);',
+'    apex_json.write(''showSpinnerOverlay''   , l_show_spinner_overlay);',
+'    apex_json.write(''showSpinnerOnRegion''  , l_show_spinner_on_region);',
+'    apex_json.close_object;',
 '',
-'  -- close JSON settings',
-'  apex_json.close_object;',
+'    -- close JSON settings',
+'    apex_json.close_object;',
 '',
-'  -- defines the function that will be run each time the dynamic action fires',
-'  l_result.javascript_function := ''function() { FOS.utils.download(this, ''|| apex_json.get_clob_output||'', ''||l_init_js_fn||''); }'';',
-'  ',
-'  apex_json.free_output;',
-'  return l_result;',
-'end;',
+'    -- defines the function that will be run each time the dynamic action fires',
+'    l_result.javascript_function := ''function() { FOS.utils.download(this, ''|| apex_json.get_clob_output||'', ''||l_init_js_fn||''); }'';',
+'',
+'    apex_json.free_output;',
+'    return l_result;',
+'end render;',
 '',
 '--------------------------------------------------------------------------------',
 '-- Main plug-in AJAX function',
 '--------------------------------------------------------------------------------',
 'function ajax',
-'  ( p_dynamic_action apex_plugin.t_dynamic_action',
-'  , p_plugin         apex_plugin.t_plugin',
+'  ( p_dynamic_action in apex_plugin.t_dynamic_action',
+'  , p_plugin         in apex_plugin.t_plugin',
 '  )',
 'return apex_plugin.t_dynamic_action_ajax_result',
 'as',
-'  -- error handling',
-'  l_apex_error               apex_error.t_error;',
-'  l_result                   apex_error.t_error_result;',
-'  ',
-'  -- return type',
-'  l_return                   apex_plugin.t_dynamic_action_ajax_result;',
-'  ',
-'  --general attributes',
-'  l_ajax_identifier          varchar2(4000)                     := replace(coalesce(apex_application.g_request, apex_plugin.get_ajax_identifier), ''PLUGIN='', '''');',
-'  l_static_id                varchar2(4000)                     := nvl(p_dynamic_action.attribute_07, p_dynamic_action.id);',
-'  l_suppress_errors          boolean                            := (p_dynamic_action.attribute_15 like ''%suppress-error-messages%'');',
-'  l_content_disposition      p_dynamic_action.attribute_09%type := nvl(p_dynamic_action.attribute_09, ''download'');',
-'  ',
-'  -- preview mode, we can alos download the file in preview mode so we need to be able to switch the download type dynamically (settings are static)',
-'  l_preview_download         varchar2(255)                      := nvl(apex_application.g_x02, ''NO'');',
-'  l_preview_mode             boolean                            := case when l_preview_download = ''YES'' then false else l_content_disposition = ''inline'' end;',
-'  l_preview_new_window       boolean                            := case when l_preview_download = ''YES'' then false else l_content_disposition = ''window'' end;',
-'  ',
-'  -- preview settings',
-'  l_prv_close_on_escape      boolean                            := instr(p_dynamic_action.attribute_10, ''close-on-escape'')           > 0;',
-'  l_prv_draggable            boolean                            := instr(p_dynamic_action.attribute_10, ''draggable'')                 > 0;',
-'  l_prv_modal                boolean                            := instr(p_dynamic_action.attribute_10, ''modal'')                     > 0;',
-'  l_prv_resizable            boolean                            := instr(p_dynamic_action.attribute_10, ''resizable'')                 > 0;',
-'  l_prv_show_file_info       boolean                            := instr(p_dynamic_action.attribute_10, ''show-file-info'')            > 0;   ',
-'  l_prv_show_download_btn    boolean                            := instr(p_dynamic_action.attribute_10, ''show-download-button'')      > 0; ',
-'  l_prv_custom_file_info_tpl boolean                            := instr(p_dynamic_action.attribute_10, ''custom-file-info-template'') > 0;   ',
-'  ',
-'  l_prv_file_info_template   p_dynamic_action.attribute_12%type := p_dynamic_action.attribute_12;',
-'  l_prv_title                p_dynamic_action.attribute_11%type := p_dynamic_action.attribute_11;',
+'    -- error handling',
+'    l_apex_error               apex_error.t_error;',
+'    l_result                   apex_error.t_error_result;',
 '',
-'  -- spinner settings',
-'  l_show_spinner             boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner'')              > 0;',
-'  l_show_spinner_overlay     boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner-overlay'')      > 0;',
-'  l_show_spinner_on_region   boolean                            := instr(p_dynamic_action.attribute_15, ''spinner-position'')          > 0;',
-'      ',
-'  -- page items to submit settings',
-'  l_items_to_submit          varchar2(4000)                     := apex_plugin_util.page_item_names_to_jquery(p_dynamic_action.attribute_05);',
+'    -- return type',
+'    l_return                   apex_plugin.t_dynamic_action_ajax_result;',
 '',
-'  -- Javascript Initialization Code',
-'  l_init_js_fn               varchar2(32767)                    := nvl(apex_plugin_util.replace_substitutions(p_dynamic_action.init_javascript_code), ''undefined'');',
-'  ',
-'  ',
-'  function get_preview_url',
-'  return varchar2',
-'  as',
+'    --general attributes',
+'    l_ajax_identifier          varchar2(4000)                     := replace(coalesce(apex_application.g_request, apex_plugin.get_ajax_identifier), ''PLUGIN='', '''');',
+'    l_static_id                varchar2(4000)                     := nvl(p_dynamic_action.attribute_07, p_dynamic_action.id);',
+'    l_suppress_errors          boolean                            := (p_dynamic_action.attribute_15 like ''%suppress-error-messages%'');',
+'    l_content_disposition      p_dynamic_action.attribute_09%type := nvl(p_dynamic_action.attribute_09, ''download'');',
 '',
-'  begin',
+'    -- preview mode, we can alos download the file in preview mode so we need to be able to switch the download type dynamically (settings are static)',
+'    l_preview_download         varchar2(255)                      := nvl(apex_application.g_x02, ''NO'');',
+'    l_preview_mode             boolean                            := case when l_preview_download = ''YES'' then false else l_content_disposition = ''inline'' end;',
+'    l_preview_new_window       boolean                            := case when l_preview_download = ''YES'' then false else l_content_disposition = ''window'' end;',
 '',
-'    return ''wwv_flow.show?p_flow_id=''||v(''app_id'')||''&p_flow_step_id=''||v(''app_page_id'')||''&p_instance=''||v(''app_session'')||',
+'    -- preview settings',
+'    l_prv_close_on_escape      boolean                            := instr(p_dynamic_action.attribute_10, ''close-on-escape'')           > 0;',
+'    l_prv_draggable            boolean                            := instr(p_dynamic_action.attribute_10, ''draggable'')                 > 0;',
+'    l_prv_modal                boolean                            := instr(p_dynamic_action.attribute_10, ''modal'')                     > 0;',
+'    l_prv_resizable            boolean                            := instr(p_dynamic_action.attribute_10, ''resizable'')                 > 0;',
+'    l_prv_show_file_info       boolean                            := instr(p_dynamic_action.attribute_10, ''show-file-info'')            > 0;',
+'    l_prv_show_download_btn    boolean                            := instr(p_dynamic_action.attribute_10, ''show-download-button'')      > 0;',
+'    l_prv_custom_file_info_tpl boolean                            := instr(p_dynamic_action.attribute_10, ''custom-file-info-template'') > 0;',
+'',
+'    l_prv_file_info_template   p_dynamic_action.attribute_12%type := p_dynamic_action.attribute_12;',
 
-'           ''&p_debug=''||v(''debug'')||''&p_request=PLUGIN=''||l_ajax_identifier||''&p_widget_name=''||p_plugin.name||''&p_widget_action=''||c_download_request||',
-'           ''&x02=''||apex_application.g_x02||''&x10=''||apex_application.g_x10;',
+'    l_prv_title                p_dynamic_action.attribute_11%type := p_dynamic_action.attribute_11;',
 '',
-'  end get_preview_url;    ',
+'    -- spinner settings',
+'    l_show_spinner             boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner'')              > 0;',
+'    l_show_spinner_overlay     boolean                            := instr(p_dynamic_action.attribute_15, ''show-spinner-overlay'')      > 0;',
+'    l_show_spinner_on_region   boolean                            := instr(p_dynamic_action.attribute_15, ''spinner-position'')          > 0;',
+'',
+'    -- page items to submit settings',
+'    l_items_to_submit          varchar2(4000)                     := apex_plugin_util.page_item_names_to_jquery(p_dynamic_action.attribute_05);',
+'',
+'    function get_preview_url',
+'    return varchar2',
+'    as',
+'    begin',
+'        return ''wwv_flow.show?p_flow_id=''||v(''app_id'')||''&p_flow_step_id=''||v(''app_page_id'')||''&p_instance=''||v(''app_session'')||',
+'               ''&p_debug=''||v(''debug'')||''&p_request=PLUGIN=''||l_ajax_identifier||''&p_widget_name=''||p_plugin.name||''&p_widget_action=''||c_download_request||',
+'               ''&x02=''||apex_application.g_x02||''&x10=''||apex_application.g_x10',
+'        ;',
+'    end get_preview_url;',
 'begin',
-'  -- standard debugging intro, but only if necessary',
-'  if apex_application.g_debug',
-'  then',
-'    apex_plugin_util.debug_dynamic_action',
-'      ( p_plugin         => p_plugin',
-'      , p_dynamic_action => p_dynamic_action',
-'      );',
-'  end if;    ',
-'',
-'  if apex_application.g_widget_action = c_download_request then',
-'    --',
-'    -- Hand off to our download routine',
-'    --',
-'    download_files',
-'      ( p_dynamic_action   => p_dynamic_action',
-'      , p_plugin           => p_plugin',
-'      , p_preview_download => apex_application.g_x02 = ''YES''',
-'      );',
-'  else',
-'    apex_json.open_object;',
-'    apex_json.write(''status''                 , ''success'');',
-'    apex_json.open_object(''data'');',
-'    apex_json.write(''previewMode''            , l_preview_mode);',
-'    if l_preview_mode or l_preview_new_window then',
-'        -- settings for download button in preview dialog',
-'        apex_json.write(''id''                 , p_dynamic_action.id);',
-'        apex_json.write(''staticId''           , l_static_id);',
-'        apex_json.write(''ajaxIdentifier''     , l_ajax_identifier);',
-'        apex_json.write(''itemsToSubmit''      , l_items_to_submit);',
-'        apex_json.write(''suppressErrorMessages'', l_suppress_errors);',
-'',
-'        -- preview settings',
-'        apex_json.write(''previewSrc''         , get_preview_url);',
-'        apex_json.write(''previewId''          , ''preview-''||apex_application.g_x01);',
-'',
-'        -- preview dialog settings',
-'        apex_json.open_object(''previewOptions'');',
-'        apex_json.write(''closeOnEscape''      , l_prv_close_on_escape);',
-'        apex_json.write(''draggable''          , l_prv_draggable);',
-'        apex_json.write(''modal''              , l_prv_modal);',
-'        apex_json.write(''resizable''          , l_prv_resizable);',
-'        apex_json.write(''showFileInfo''       , l_prv_show_file_info);',
-'        apex_json.write(''showDownloadBtn''    , l_prv_show_download_btn);',
-'        apex_json.write(''title''              , l_prv_title);',
-'        if l_prv_custom_file_info_tpl then',
-'            apex_json.write(''fileInfoTpl''    , l_prv_file_info_template);',
-'        end if;',
-'        ',
-'        apex_json.close_object;',
-'',
-'        -- spinner settings',
-'        apex_json.open_object(''spinnerSettings'');',
-'        apex_json.write(''showSpinner''        , l_show_spinner);',
-'        apex_json.write(''showSpinnerOverlay'' , l_show_spinner_overlay);',
-'        apex_json.write(''showSpinnerOnRegion'', l_show_spinner_on_region);',
-'        apex_json.close_object;',
-'      end if;',
-'      apex_json.write(''formId''                 , ''form-''||apex_application.g_x01);',
-'      apex_json.write(''iframeId''               , ''iframe-''||apex_application.g_x01);',
-'      apex_json.write(''appId''                  , v(''APP_ID''));',
-'      apex_json.write(''pageId''                 , v(''APP_PAGE_ID''));',
-'      apex_json.write(''sessionId''              , v(''APP_SESSION''));',
-'      apex_json.write(''debug''                  , v(''DEBUG''));',
-'      apex_json.write(''request''                , l_ajax_identifier);',
-'      apex_json.write(''widgetName''             , p_plugin.name);',
-'      apex_json.write(''action''                 , c_download_request);',
-'      apex_json.write(''previewDownload''        , l_preview_download);',
-'      apex_json.close_object;',
-'      apex_json.close_object;',
+'    -- standard debugging intro, but only if necessary',
+'    if apex_application.g_debug',
+'    then',
+'      apex_plugin_util.debug_dynamic_action',
+'        ( p_plugin         => p_plugin',
+'        , p_dynamic_action => p_dynamic_action',
+'        );',
 '    end if;',
-'    ',
+'',
+'    if apex_application.g_widget_action = c_download_request',
+'    then',
+'        -- Hand off to our download routine',
+'        download_files',
+'          ( p_dynamic_action   => p_dynamic_action',
+'          , p_preview_download => apex_application.g_x02 = ''YES''',
+'          );',
+'    else',
+'        apex_json.open_object;',
+'        apex_json.write(''status''                 , ''success'');',
+'        apex_json.open_object(''data'');',
+'        apex_json.write(''previewMode''            , l_preview_mode);',
+'',
+'        if l_preview_mode or l_preview_new_window',
+'        then',
+'            -- settings for download button in preview dialog',
+'            apex_json.write(''id''                 , p_dynamic_action.id);',
+'            apex_json.write(''staticId''           , l_static_id);',
+'            apex_json.write(''ajaxIdentifier''     , l_ajax_identifier);',
+'            apex_json.write(''itemsToSubmit''      , l_items_to_submit);',
+'            apex_json.write(''suppressErrorMessages'', l_suppress_errors);',
+'',
+'            -- preview settings',
+'            apex_json.write(''previewSrc''         , get_preview_url);',
+'            apex_json.write(''previewId''          , ''preview-''||apex_application.g_x01);',
+'',
+'            -- preview dialog settings',
+'            apex_json.open_object(''previewOptions'');',
+'            apex_json.write(''closeOnEscape''      , l_prv_close_on_escape);',
+'            apex_json.write(''draggable''          , l_prv_draggable);',
+'            apex_json.write(''modal''              , l_prv_modal);',
+'            apex_json.write(''resizable''          , l_prv_resizable);',
+'            apex_json.write(''showFileInfo''       , l_prv_show_file_info);',
+'            apex_json.write(''showDownloadBtn''    , l_prv_show_download_btn);',
+'            apex_json.write(''title''              , l_prv_title);',
+'',
+'            if l_prv_custom_file_info_tpl',
+'            then',
+'                apex_json.write(''fileInfoTpl''    , l_prv_file_info_template);',
+'            end if;',
+'',
+'            apex_json.close_object;',
+'',
+'            -- spinner settings',
+'            apex_json.open_object(''spinnerSettings'');',
+'            apex_json.write(''showSpinner''        , l_show_spinner);',
+'            apex_json.write(''showSpinnerOverlay'' , l_show_spinner_overlay);',
+'            apex_json.write(''showSpinnerOnRegion'', l_show_spinner_on_region);',
+'            apex_json.close_object;',
+'        end if;',
+'',
+'        apex_json.write(''formId''                 , ''form-''||apex_application.g_x01);',
+'        apex_json.write(''iframeId''               , ''iframe-''||apex_application.g_x01);',
+'        apex_json.write(''appId''                  , v(''APP_ID''));',
+'        apex_json.write(''pageId''                 , v(''APP_PAGE_ID''));',
+'        apex_json.write(''sessionId''              , v(''APP_SESSION''));',
+'        apex_json.write(''debug''                  , v(''DEBUG''));',
+'        apex_json.write(''request''                , l_ajax_identifier);',
+'        apex_json.write(''widgetName''             , p_plugin.name);',
+'        apex_json.write(''action''                 , c_download_request);',
+'        apex_json.write(''previewDownload''        , l_preview_download);',
+'        apex_json.close_object;',
+'        apex_json.close_object;',
+'    end if;',
+'',
 '    return l_return;',
-'    ',
+'',
 'exception',
 '    -- this is the exception thrown by stop_apex_engine',
 '    -- we catch it here because we are catching all errors',
@@ -796,20 +795,10 @@ wwv_flow_api.create_plugin(
 '    when others then',
 '      apex_json.initialize_output;',
 '      l_apex_error.message             := sqlerrm;',
-'      --l_apex_error.additional_info     := ;',
-'      --l_apex_error.display_location    := ;',
-'      --l_apex_error.association_type    := ;',
-'      --l_apex_error.page_item_name      := ;',
-'      --l_apex_error.region_id           := ;',
-'      --l_apex_error.column_alias        := ;',
-'      --l_apex_error.row_num             := ;',
-'      --l_apex_error.is_internal_error   := ;',
-'      --l_apex_error.apex_error_code     := ;',
 '      l_apex_error.ora_sqlcode         := sqlcode;',
 '      l_apex_error.ora_sqlerrm         := sqlerrm;',
 '      l_apex_error.error_backtrace     := dbms_utility.format_error_backtrace;',
-'      --l_apex_error.component           := ;',
-'      --',
+'',
 '      l_result := error_function_callback(l_apex_error);',
 '',
 '      apex_json.open_object;',
@@ -819,7 +808,7 @@ wwv_flow_api.create_plugin(
 '      apex_json.write(''display_location'', l_result.display_location);',
 '      apex_json.write(''page_item_name''  , l_result.page_item_name);',
 '      apex_json.write(''column_alias''    , l_result.column_alias);',
-'      apex_json.close_object; ',
+'      apex_json.close_object;',
 '      return l_return;',
 'end ajax;'))
 ,p_api_version=>2
@@ -830,15 +819,26 @@ wwv_flow_api.create_plugin(
 ,p_substitute_attributes=>true
 ,p_subscribe_plugin_settings=>true
 ,p_help_text=>wwv_flow_string.join(wwv_flow_t_varchar2(
-'<p>Use the <strong>FOS - Download File(s)</strong> dynamic-action plug-in to start the browser download of files stored in the database. The files can be compiled via a SQL query or procedurally in a PL/SQL code block. If multiple files are returned,'
-||' they will be zipped automatically. A single file can optionally be zipped as well. The files can be BLOBs or CLOBs.</p>',
-'<p>The plug-in supports "Wait for Result" so you can continue following actions once the file has been downloaded, or listen to the download completed event to perform further actions.</p>'))
-,p_version_identifier=>'20.1.1'
+'<p>The <strong>FOS - Download File(s)</strong> dynamic action plug-in enables the downloading of one or multiple database-stored BLOBs or CLOBs. You don''t have to worry about setting HTTP headers, converting CLOBs to BLOBs, or zipping the files. It''s'
+||' all done for you. Just specify which files to download via a SQL query, or a more dynamic PL/SQL code block. Multiple files are zipped automatically, but a single file can optionally be zipped as well.</p>',
+'<p>The benefits of downloading a file using a dynamic action include:',
+'<ol>',
+'    <li>You have the flexibility of using SQL to decide what file(s) to download including filtering based on page item values</li>',
+'    <li>You can have further actions defined after the download action for improved workflow</li>',
+'    <li>You can wait for the result of the file to download before continuing your next action</li>',
+'    <li>You do NOT issue a page submit or redirect, which means you can handle errors better i.e. you won''t be redirected to an error page</li>',
+'</ol>    ',
+'</p>',
+'<p><strong>Note:</strong> in "some cases" you may need to change your security setting "Embed in Frames" and set it to either "Allow from same origin" or "Allow" for this action to work correctly in preview mode. This is because the file will be down'
+||'loaded in a hidden iFrame on the page. If your setting is set to "Deny" you may see a message in the console like: "Load denied by X-Frame-Options". We evaluated a number of techniques to download files and found that this technique has the best perf'
+||'ormance with larger files.</p>',
+'</p>'))
+,p_version_identifier=>'20.2.0'
 ,p_about_url=>'https://fos.world'
 ,p_plugin_comment=>wwv_flow_string.join(wwv_flow_t_varchar2(
 '@fos-auto-return-to-page',
 '@fos-auto-open-files:js/script.js'))
-,p_files_version=>665
+,p_files_version=>668
 );
 end;
 /
@@ -1315,6 +1315,7 @@ wwv_flow_api.g_varchar2_table(3) := '20202020202044796E616D696320416374696F6E206
 wwv_flow_api.g_varchar2_table(4) := '2020436F6E66696775726174696F6E206F626A65637420686F6C64696E672074686520646F776E6C6F61642066696C6520636F6E6669670A2A2F0A2866756E6374696F6E20282429207B0A0A0976617220646F776E6C6F616454696D657273203D207B7D';
 wwv_flow_api.g_varchar2_table(5) := '3B0A0976617220646F776E6C6F61645370696E6E657273203D207B7D3B0A097661722066696C65496E666F203D207B7D3B0A0976617220617474656D707473203D207B7D3B0A0976617220464F524D5F505245464958203D2027666F726D2D273B0A0976';
 wwv_flow_api.g_varchar2_table(6) := '617220494652414D455F505245464958203D2027696672616D652D273B0A0976617220505245564945575F505245464958203D2027707265766965772D273B0A0976617220544F4B454E5F505245464958203D2027464F53273B0A0A0966756E6374696F';
+
 wwv_flow_api.g_varchar2_table(7) := '6E20636C65616E557028646F776E6C6F6164466E4E616D652C20707265766965774D6F646529207B0A0909766172207072657669657724203D202428272327202B20505245564945575F505245464958202B20646F776E6C6F6164466E4E616D65292C0A';
 wwv_flow_api.g_varchar2_table(8) := '090909696672616D6524203D202428272327202B20494652414D455F505245464958202B20646F776E6C6F6164466E4E616D65292C0A090909666F726D24203D202428272327202B20464F524D5F505245464958202B20646F776E6C6F6164466E4E616D';
 wwv_flow_api.g_varchar2_table(9) := '65293B0A0A090969662028747970656F6620646F776E6C6F61645370696E6E6572735B646F776E6C6F6164466E4E616D655D203D3D3D202266756E6374696F6E2229207B0A090909646F776E6C6F61645370696E6E6572735B646F776E6C6F6164466E4E';
@@ -1322,167 +1323,166 @@ wwv_flow_api.g_varchar2_table(10) := '616D655D28293B202F2F20746869732066756E6374
 wwv_flow_api.g_varchar2_table(11) := '6F726D242920666F726D242E72656D6F766528293B0A0A09092F2F20576520646F6E27742072656D6F76652074686520707265766965772F696672616D6520696E2070726576696577206D6F646520666F72206F6276696F757320726561736F6E732069';
 wwv_flow_api.g_varchar2_table(12) := '2E652E2061732074686579206172652076696577696E672069740A09096966202821707265766965774D6F646529207B0A09090969662028696672616D65242920696672616D65242E72656D6F766528293B0A0909096966202870726576696577242920';
 wwv_flow_api.g_varchar2_table(13) := '70726576696577242E72656D6F766528293B0A09097D0A097D0A0A0966756E6374696F6E20736574437572736F7228656C242C207374796C6529207B0A09092F2F656C242E6373732822637572736F72222C207374796C65293B202F2F20776520686176';
-
 wwv_flow_api.g_varchar2_table(14) := '652064697361626C6564207468697320666F72206E6F770A097D0A0A092F2F20436F6F6B69652068616E646C696E6720636F6D65732066726F6D3A2068747470733A2F2F737461636B6F766572666C6F772E636F6D2F7175657374696F6E732F31313036';
 wwv_flow_api.g_varchar2_table(15) := '3337372F6465746563742D7768656E2D62726F777365722D72656365697665732D66696C652D646F776E6C6F61640A0966756E6374696F6E20676574436F6F6B6965286E616D6529207B0A0909766172207061727473203D20646F63756D656E742E636F';
 wwv_flow_api.g_varchar2_table(16) := '6F6B69652E73706C6974286E616D65202B20223D22293B0A09096966202870617274732E6C656E677468203D3D2032292072657475726E207B206E616D653A206E616D652C2076616C75653A2070617274735B315D2E73706C697428223B22292E736869';
 wwv_flow_api.g_varchar2_table(17) := '66742829207D3B0A097D0A0A0966756E6374696F6E20657870697265436F6F6B696528636F6F6B69654E616D6529207B0A0909646F63756D656E742E636F6F6B6965203D0A090909656E636F6465555249436F6D706F6E656E7428636F6F6B69654E616D';
 wwv_flow_api.g_varchar2_table(18) := '6529202B20223D64656C657465643B20657870697265733D22202B206E657720446174652830292E746F555443537472696E6728293B0A097D0A0A092F2F20547261636B207768656E20776520726563656965766520636F6F6B69652066726F6D207468';
 wwv_flow_api.g_varchar2_table(19) := '652073657276657220746F2064657465726D696E652066696C6520697320646F776E6C6F6164696E670A0966756E6374696F6E20747261636B446F776E6C6F616428636F6E6669672C20646F776E6C6F6164466E4E616D6529207B0A0909736574437572';
-wwv_flow_api.g_varchar2_table(20) := '736F7228636F6E6669672E74726967676572696E67456C656D656E74242C20227761697422293B0A0909617474656D7074735B646F776E6C6F6164466E4E616D655D203D2033303B0A0909646F776E6C6F616454696D6572735B646F776E6C6F6164466E';
-wwv_flow_api.g_varchar2_table(21) := '4E616D655D203D2077696E646F772E736574496E74657276616C2866756E6374696F6E202829207B0A09090976617220746F6B656E203D20676574436F6F6B696528646F776E6C6F6164466E4E616D65293B0A0A0909096966202828746F6B656E202626';
-wwv_flow_api.g_varchar2_table(22) := '20746F6B656E2E6E616D65203D3D20646F776E6C6F6164466E4E616D6529207C7C2028617474656D7074735B646F776E6C6F6164466E4E616D655D203D3D20302929207B0A0909090969662028746F6B656E29207B0A0909090909636F6E6669672E6669';
-wwv_flow_api.g_varchar2_table(23) := '6C65496E666F203D204A534F4E2E706172736528746F6B656E2E76616C7565293B0A090909090966696C65496E666F5B646F776E6C6F6164466E4E616D655D203D20636F6E6669672E66696C65496E666F3B0A090909097D0A0909090973746F70547261';
-wwv_flow_api.g_varchar2_table(24) := '636B696E67446F776E6C6F616428636F6E6669672C20646F776E6C6F6164466E4E616D65293B0A0909097D0A0A090909617474656D7074735B646F776E6C6F6164466E4E616D655D2D2D3B0A09097D2C2031303030293B0A0A090972657475726E20646F';
-wwv_flow_api.g_varchar2_table(25) := '776E6C6F6164466E4E616D653B0A097D0A0A0966756E6374696F6E2073746F70547261636B696E67446F776E6C6F616428636F6E6669672C20646F776E6C6F6164466E4E616D6529207B0A0909766172206576656E744E616D65203D2028636F6E666967';
-wwv_flow_api.g_varchar2_table(26) := '2E707265766965774D6F646529203F2027666F732D646F776E6C6F61642D707265766965772D636F6D706C65746527203A2027666F732D646F776E6C6F61642D66696C652D636F6D706C657465273B0A0909636C65616E557028646F776E6C6F6164466E';
-wwv_flow_api.g_varchar2_table(27) := '4E616D652C20636F6E6669672E707265766965774D6F6465293B0A090977696E646F772E636C656172496E74657276616C28646F776E6C6F616454696D6572735B646F776E6C6F6164466E4E616D655D293B0A0909657870697265436F6F6B696528646F';
-wwv_flow_api.g_varchar2_table(28) := '776E6C6F6164466E4E616D65293B0A090964656C65746520646F776E6C6F616454696D6572735B646F776E6C6F6164466E4E616D655D3B0A090964656C65746520617474656D7074735B646F776E6C6F6164466E4E616D655D3B0A090969662028636F6E';
-wwv_flow_api.g_varchar2_table(29) := '6669672E66696C65496E666F29207B0A090909617065782E6576656E742E7472696767657228646F63756D656E742E626F64792C206576656E744E616D652C20636F6E666967293B0A09090964656C65746520636F6E6669672E66696C65496E666F3B0A';
-wwv_flow_api.g_varchar2_table(30) := '09097D0A0909736574437572736F7228636F6E6669672E74726967676572696E67456C656D656E74242C2027706F696E74657227293B0A097D0A0A092F2F204D61696E20706C75672D696E20656E74727920706F696E740A09464F532E7574696C732E64';
-wwv_flow_api.g_varchar2_table(31) := '6F776E6C6F6164203D2066756E6374696F6E20286461436F6E746578742C206F7074696F6E732C20696E6974466E29207B0A090976617220636F6E6669672C20706C7567696E4E616D65203D2027464F53202D20446F776E6C6F61642046696C65287329';
-wwv_flow_api.g_varchar2_table(32) := '272C0A0909096D65203D20746869732C0A090909646F776E6C6F6164466E4E616D65203D20676574446F776E6C6F61644964286F7074696F6E732E6964292C0A0909096166456C656D656E7473203D206461436F6E746578742E6166666563746564456C';
-wwv_flow_api.g_varchar2_table(33) := '656D656E74732C0A09090974726967676572696E67456C656D656E74203D206461436F6E746578742E74726967676572696E67456C656D656E743B0A0A0909636F6E666967203D20242E657874656E64287B7D2C206F7074696F6E73293B0A0A09096170';
-wwv_flow_api.g_varchar2_table(34) := '65782E64656275672E696E666F28706C7567696E4E616D652C20636F6E666967293B0A0A090966756E6374696F6E20676574446F776E6C6F6164496428696429207B0A09090972657475726E20544F4B454E5F505245464958202B206964202B206E6577';
-wwv_flow_api.g_varchar2_table(35) := '204461746528292E67657454696D6528293B0A09097D0A0A09092F2F2067656E657261746520612064796E616D696320666F726D2077697468206F75722066696C6520646F776E6C6F616420636F6E7465787420696E666F0A090966756E6374696F6E20';
-wwv_flow_api.g_varchar2_table(36) := '676574466F726D54706C286461746129207B0A09090972657475726E20273C666F726D20616374696F6E3D227777765F666C6F772E73686F7722206D6574686F643D22706F73742220656E63747970653D226D756C7469706172742F666F726D2D646174';
-wwv_flow_api.g_varchar2_table(37) := '61222069643D2227202B20646174612E666F726D4964202B202722207461726765743D2227202B20646174612E696672616D654964202B202722206F6E6C6F61643D22223E27202B0A09090909273C696E70757420747970653D2268696464656E22206E';
-wwv_flow_api.g_varchar2_table(38) := '616D653D22705F666C6F775F6964222076616C75653D2227202B20646174612E6170704964202B2027222069643D2270466C6F7749643222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F666C6F';
-wwv_flow_api.g_varchar2_table(39) := '775F737465705F6964222076616C75653D2227202B20646174612E706167654964202B2027222069643D2270466C6F775374657049643222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F696E73';
-wwv_flow_api.g_varchar2_table(40) := '74616E6365222076616C75653D2227202B20646174612E73657373696F6E4964202B2027222069643D2270496E7374616E63653222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F726571756573';
-wwv_flow_api.g_varchar2_table(41) := '74222076616C75653D22504C5547494E3D27202B20646174612E72657175657374202B2027222069643D2270526571756573743222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F646562756722';
-wwv_flow_api.g_varchar2_table(42) := '2076616C75653D2227202B2028646174612E6465627567207C7C20272729202B2027222069643D227044656275673222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F7769646765745F6E616D65';
-wwv_flow_api.g_varchar2_table(43) := '222076616C75653D2227202B2028646174612E7769646765744E616D65207C7C20272729202B2027222069643D22705769646765744E616D653222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F';
-wwv_flow_api.g_varchar2_table(44) := '7769646765745F616374696F6E222076616C75653D2227202B2028646174612E616374696F6E207C7C20272729202B2027222069643D2270576964676574416374696F6E3222202F3E27202B0A09090909273C696E70757420747970653D226869646465';
-wwv_flow_api.g_varchar2_table(45) := '6E22206E616D653D22705F7769646765745F616374696F6E5F6D6F64222076616C75653D2227202B2028646174612E616374696F6E4D6F64207C7C20272729202B2027222069643D2270576964676574416374696F6E4D6F643222202F3E27202B0A0909';
-wwv_flow_api.g_varchar2_table(46) := '0909273C696E70757420747970653D2268696464656E22206E616D653D22783031222076616C75653D2227202B2028646174612E783031207C7C20272729202B2027222069643D2278303122202F3E27202B0A09090909273C696E70757420747970653D';
-wwv_flow_api.g_varchar2_table(47) := '2268696464656E22206E616D653D22783032222076616C75653D2227202B2028646174612E70726576696577446F776E6C6F6164207C7C20274E4F2729202B2027222069643D2278303222202F3E27202B0A09090909273C696E70757420747970653D22';
-wwv_flow_api.g_varchar2_table(48) := '68696464656E22206E616D653D22783033222076616C75653D2227202B2028646174612E783033207C7C20272729202B2027222069643D2278303322202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D2278';
-wwv_flow_api.g_varchar2_table(49) := '3034222076616C75653D2227202B2028646174612E783034207C7C20272729202B2027222069643D2278303422202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783035222076616C75653D2227202B20';
-wwv_flow_api.g_varchar2_table(50) := '28646174612E783035207C7C20272729202B2027222069643D2278303522202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783036222076616C75653D2227202B2028646174612E783036207C7C202727';
-wwv_flow_api.g_varchar2_table(51) := '29202B2027222069643D2278303622202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783037222076616C75653D2227202B2028646174612E783037207C7C20272729202B2027222069643D2278303722';
-wwv_flow_api.g_varchar2_table(52) := '202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783038222076616C75653D2227202B2028646174612E783038207C7C20272729202B2027222069643D2278303822202F3E27202B0A09090909273C696E';
-wwv_flow_api.g_varchar2_table(53) := '70757420747970653D2268696464656E22206E616D653D22783039222076616C75653D2227202B2028646174612E783039207C7C20272729202B2027222069643D2278303922202F3E27202B0A09090909273C696E70757420747970653D226869646465';
-wwv_flow_api.g_varchar2_table(54) := '6E22206E616D653D22783130222076616C75653D2227202B2028646174612E746F6B656E207C7C20272729202B2027222069643D2278313022202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D2266313022';
-wwv_flow_api.g_varchar2_table(55) := '2076616C75653D2227202B2028646174612E663130207C7C20272729202B2027222069643D2266313022202F3E27202B0A09090909273C2F666F726D3E273B0A09097D0A0A09092F2F2067656E657261746520612064796E616D696320696672616D6520';
-wwv_flow_api.g_varchar2_table(56) := '6261736564206F6E206F757220646F776E6C6F616420636F6E7465787420696E666F20616E642070726F76696465206120756E69717565206F6E6C6F61642068616E646C65722066756E6374696F6E0A090966756E6374696F6E20676574496672616D65';
-wwv_flow_api.g_varchar2_table(57) := '54706C28636F6E6669672C20646F776E6C6F6164466E4E616D6529207B0A0909097661722074706C3B0A09090969662028636F6E6669672E707265766965774D6F646529207B0A0909090974706C203D20273C696672616D652069643D2227202B20636F';
-wwv_flow_api.g_varchar2_table(58) := '6E6669672E696672616D654964202B202722206E616D653D2227202B20636F6E6669672E696672616D654964202B2027222077696474683D223130302522206865696768743D223130302522207374796C653D226D696E2D77696474683A203935253B68';
-wwv_flow_api.g_varchar2_table(59) := '65696768743A313030253B22207363726F6C6C696E673D226175746F2220636C6173733D22666F732D707265766965772D6D6F646520752D68696464656E22206F6E6C6F61643D22464F532E7574696C732E646F776E6C6F61642E27202B20646F776E6C';
-wwv_flow_api.g_varchar2_table(60) := '6F6164466E4E616D65202B2027287468697329223E3C2F696672616D653E273B0A0909097D20656C7365207B0A0909090974706C203D20273C696672616D652069643D2227202B20636F6E6669672E696672616D654964202B202722206E616D653D2227';
-wwv_flow_api.g_varchar2_table(61) := '202B20636F6E6669672E696672616D654964202B20272220636C6173733D22752D68696464656E22206F6E6C6F61643D22464F532E7574696C732E646F776E6C6F61642E27202B20646F776E6C6F6164466E4E616D65202B2027287468697329223E3C2F';
-wwv_flow_api.g_varchar2_table(62) := '696672616D653E273B0A0909097D0A09090972657475726E2074706C3B0A09097D0A0A09092F2F20726567756C61722066696C6520646F776E6C6F61640A090966756E6374696F6E206174746163686D656E74446F776E6C6F616428666F726D44617461';
-wwv_flow_api.g_varchar2_table(63) := '29207B0A09090976617220666F726D54706C2C20696672616D6554706C2C20666F726D2C20696672616D65242C0A0909090963616E63656C526573756D65203D2066616C73653B0A0A090909666F726D446174612E74726967676572696E67456C656D65';
-wwv_flow_api.g_varchar2_table(64) := '6E7424203D20242874726967676572696E67456C656D656E74293B0A090909666F726D446174612E746F6B656E203D20747261636B446F776E6C6F616428666F726D446174612C20646F776E6C6F6164466E4E616D65293B0A090909666F726D54706C20';
-wwv_flow_api.g_varchar2_table(65) := '3D20676574466F726D54706C28666F726D44617461293B0A090909696672616D6554706C203D20676574496672616D6554706C28666F726D446174612C20646F776E6C6F6164466E4E616D65293B0A0A090909696620282428272327202B20666F726D44';
-wwv_flow_api.g_varchar2_table(66) := '6174612E666F726D4964292E6C656E67746829207B0A090909092428272327202B20666F726D446174612E666F726D4964292E72656D6F766528290A0909097D0A090909666F726D203D202428646F63756D656E742E626F6479292E617070656E642866';
-wwv_flow_api.g_varchar2_table(67) := '6F726D54706C29202626202428272327202B20666F726D446174612E666F726D4964295B305D3B0A090909696672616D6524203D202428272327202B20666F726D446174612E696672616D654964293B0A09090969662028696672616D65242E6C656E67';
-wwv_flow_api.g_varchar2_table(68) := '7468203D3D3D203029207B0A090909092428646F63756D656E742E626F6479292E617070656E6428696672616D6554706C293B0A0909097D20656C7365207B0A09090909696672616D65242E6174747228276F6E6C6F6164272C2027464F532E7574696C';
-wwv_flow_api.g_varchar2_table(69) := '732E646F776E6C6F61642E27202B20646F776E6C6F6164466E4E616D65202B202728746869732927293B0A0909097D0A0909092F2F207375626D6974206F757220666F726D20746F20646F776E6C6F6164207468652066696C650A09090969662028666F';
-wwv_flow_api.g_varchar2_table(70) := '726D20262620666F726D2E7375626D697429207B0A09090909666F726D2E7375626D697428293B0A0909097D20656C7365207B0A0909090963616E63656C526573756D65203D20747275653B0A0909097D0A0909092F2F20746869732069732072657175';
-wwv_flow_api.g_varchar2_table(71) := '6972656420666F72207768656E20776520617265206F70656E696E67206D6F64616C206469616C6F67732C20666F722061637475616C2072656469726563747320746865207061676520756E6C6F616473206D616B696E67207468697320726564756E64';
-wwv_flow_api.g_varchar2_table(72) := '616E740A09090969662028636F6E6669672E70726576696577446F776E6C6F616420213D20275945532729207B0A09090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C6261636B2C2063616E63656C526573';
-wwv_flow_api.g_varchar2_table(73) := '756D65293B0A0909097D0A09097D0A0A09092F2F2066696C65207072657669657720696E2061206469616C6F672077697468206F7074696F6E616C20646F776E6C6F616420627574746F6E0A090966756E6374696F6E2070726576696577496E4469616C';
-wwv_flow_api.g_varchar2_table(74) := '6F6728636F6E66696729207B0A090909766172207072657669657724203D202428272327202B20636F6E6669672E707265766965774964292C0A09090909696672616D6524203D202428272327202B20636F6E6669672E696672616D654964292C0A0909';
-wwv_flow_api.g_varchar2_table(75) := '090970726576696577427574746F6E73203D205B5D2C0A09090909707265766965774F7074696F6E73203D20636F6E6669672E707265766965774F7074696F6E733B0A0A0909092F2F20416C6C6F772074686520646576656C6F70657220746F20706572';
-wwv_flow_api.g_varchar2_table(76) := '666F726D20616E79206C617374202863656E7472616C697A656429206368616E676573207573696E67204A61766173637269707420496E697469616C697A6174696F6E20436F64652073657474696E670A0909092F2F20696E206164646974696F6E2074';
-wwv_flow_api.g_varchar2_table(77) := '6F206F757220706C7567696E20636F6E6669672077652077696C6C207061737320696E206120326E64206F626A65637420666F7220636F6E6669677572696E672074686520464F53206E6F74696669636174696F6E730A09090969662028696E6974466E';
-wwv_flow_api.g_varchar2_table(78) := '20696E7374616E63656F662046756E6374696F6E29207B0A09090909696E6974466E2E63616C6C286461436F6E746578742C20636F6E666967293B0A0909097D0A0A09090966756E6374696F6E2067657446696C65496E666F2829207B0A090909097661';
-wwv_flow_api.g_varchar2_table(79) := '722066696C6544657461696C73203D2066696C65496E666F5B646F776E6C6F6164466E4E616D655D3B0A0909090972657475726E202866696C6544657461696C7329203F2028707265766965774F7074696F6E732E66696C65496E666F54706C207C7C20';
-wwv_flow_api.g_varchar2_table(80) := '273C7374726F6E673E4E616D653A3C2F7374726F6E673E20234E414D45233C6272202F3E27202B0A0909090909273C7374726F6E673E53697A653A3C2F7374726F6E673E202353495A45233C6272202F3E27202B0A0909090909273C7374726F6E673E4D';
-wwv_flow_api.g_varchar2_table(81) := '696D6520547970653A3C2F7374726F6E673E20234D494D455F545950452327290A09090909092E7265706C616365282F5C234E414D455C232F2C2066696C6544657461696C732E6E616D65290A09090909092E7265706C616365282F5C2353495A455C23';
-wwv_flow_api.g_varchar2_table(82) := '2F2C2066696C6544657461696C732E73697A65290A09090909092E7265706C616365282F5C234D494D455F545950455C232F2C2066696C6544657461696C732E6D696D6554797065290A09090909093A2028707265766965774F7074696F6E732E6C6F61';
-wwv_flow_api.g_varchar2_table(83) := '64696E674D7367207C7C20275468652066696C6520696E666F726D6174696F6E206973207374696C6C206C6F6164696E672E2E2E2E27293B0A0909097D0A0A0909096966202870726576696577242E6C656E677468203D3D3D203029207B0A0909090924';
-wwv_flow_api.g_varchar2_table(84) := '28646F63756D656E742E626F6479292E617070656E6428273C6469762069643D2227202B20636F6E6669672E707265766965774964202B2027223E27202B20676574496672616D6554706C28636F6E6669672C20646F776E6C6F6164466E4E616D652920';
-wwv_flow_api.g_varchar2_table(85) := '2B20273C2F6469763E27293B0A09090909696672616D6524203D202428272327202B20636F6E6669672E696672616D654964293B0A090909097072657669657724203D202428272327202B20636F6E6669672E707265766965774964293B0A0909097D0A';
-wwv_flow_api.g_varchar2_table(86) := '090909696672616D65242E72656D6F7665436C6173732827752D68696464656E27293B0A0A0909092F2F2046697265666F7820706F73744D6573736167652068616E646C657220666F722063726F7373206F726967696E20736563757269747920657863';
-wwv_flow_api.g_varchar2_table(87) := '657074696F6E732073686F77696E67205044462066696C65730A090909242877696E646F77292E6F6E28226D657373616765222C2066756E6374696F6E20286529207B0A090909097661722064617461203D20652E6F726967696E616C4576656E742E64';
-wwv_flow_api.g_varchar2_table(88) := '6174613B0A09090909696620286461746120262620646174612E696672616D654964203D3D3D20636F6E6669672E696672616D65496429207B0A0909090909242874686973292E6F66662865293B202F2F20756E62696E6420746865206576656E742068';
-wwv_flow_api.g_varchar2_table(89) := '616E646C6572206173206974206D6174636865730A090909090964656C65746520464F532E7574696C732E646F776E6C6F61645B646F776E6C6F6164466E4E616D655D3B202F2F2064656C657465206F75722066756E6374696F6E2068616E646C65720A';
-wwv_flow_api.g_varchar2_table(90) := '0909090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C6261636B2C2066616C7365293B202F2F20726573756D6520666F6C6C6F77696E6720616374696F6E730A090909097D0A0909097D293B0A0A09090970';
-wwv_flow_api.g_varchar2_table(91) := '726576696577242E6F6E28226469616C6F67726573697A65222C2066756E6374696F6E202829207B0A090909097661722068203D2070726576696577242E68656967687428292C0A090909090977203D2070726576696577242E776964746828293B0A09';
-wwv_flow_api.g_varchar2_table(92) := '0909092F2F20726573697A6520696672616D6520736F20746861742061706578206469616C6F67207061676520676574732077696E646F7720726573697A65206576656E740A090909092F2F2075736520776964746820616E6420686569676874206F66';
-wwv_flow_api.g_varchar2_table(93) := '206469616C6F6720636F6E74656E7420726174686572207468616E2075692E73697A6520736F2074686174206469616C6F67207469746C652069732074616B656E20696E20746F20636F6E73696465726174696F6E0A0909090970726576696577242E63';
-wwv_flow_api.g_varchar2_table(94) := '68696C6472656E2822696672616D6522292E77696474682877292E6865696768742868293B0A0909097D293B0A0909090A09090969662028707265766965774F7074696F6E732E73686F7746696C65496E666F29207B0A09090909707265766965774275';
-wwv_flow_api.g_varchar2_table(95) := '74746F6E732E70757368287B0A0909090909746578743A202220222C0A090909090969636F6E3A202266612066612D696E666F20666F732D6469616C6F672D66696C652D696E666F222C0A0909090909636C69636B3A2066756E6374696F6E2028652920';
-wwv_flow_api.g_varchar2_table(96) := '7B0A0909090909092428652E746172676574292E746F6F6C746970287B0A090909090909096974656D733A20652E7461726765742C0A09090909090909636F6E74656E743A2067657446696C65496E666F28292C0A09090909090909706F736974696F6E';
-wwv_flow_api.g_varchar2_table(97) := '3A207B0A09090909090909096D793A202263656E74657220626F74746F6D222C202F2F207468652022616E63686F7220706F696E742220696E2074686520746F6F6C74697020656C656D656E740A090909090909090961743A202263656E74657220746F';
-wwv_flow_api.g_varchar2_table(98) := '702D3130222C202F2F2074686520706F736974696F6E206F66207468617420616E63686F7220706F696E742072656C617469766520746F2073656C656374656420656C656D656E740A090909090909097D2C0A09090909090909636C61737365733A207B';
-wwv_flow_api.g_varchar2_table(99) := '0A09090909090909092275692D746F6F6C746970223A2022666F732D6469616C6F672D66696C652D696E666F2D746F6F6C74697020746F702075692D636F726E65722D616C6C2075692D7769646765742D736861646F77220A090909090909097D0A0909';
-wwv_flow_api.g_varchar2_table(100) := '090909097D293B0A0909090909092428652E746172676574292E746F6F6C74697028226F70656E22293B0A09090909097D0A090909097D293B0A0909097D0A09090969662028707265766965774F7074696F6E732E73686F77446F776E6C6F616442746E';
-wwv_flow_api.g_varchar2_table(101) := '29207B0A0909090970726576696577427574746F6E732E70757368287B0A0909090909746578743A2022446F776E6C6F6164222C0A090909090969636F6E3A202266612066612D646F776E6C6F6164222C0A0909090909636C69636B3A2066756E637469';
-wwv_flow_api.g_varchar2_table(102) := '6F6E202829207B0A090909090909464F532E7574696C732E646F776E6C6F6164286461436F6E746578742C0A09090909090909242E657874656E64287B7D2C0A0909090909090909636F6E6669672C207B0A0909090909090909707265766965774D6F64';
-wwv_flow_api.g_varchar2_table(103) := '653A2066616C73652C0A090909090909090970726576696577446F776E6C6F61643A202759455327202F2F20746F20696E6469636174652077652061726520646F776E6C6F6164696E672066726F6D2077697468696E2070726576696577206D6F64650A';
-wwv_flow_api.g_varchar2_table(104) := '090909090909097D290A090909090909293B0A09090909097D2C0A0909090909636C61737365733A207B0A0909090909092275692D746F6F6C746970223A2022666F732D6469616C6F672D66696C652D646F776E6C6F61642D62746E20752D686F742075';
-wwv_flow_api.g_varchar2_table(105) := '692D636F726E65722D616C6C2075692D7769646765742D736861646F77220A09090909097D0A090909097D293B0A0909097D0A0909092F2F20696E697469616C697A65207468652070726576696577206469616C6F670A09090970726576696577242E64';
-wwv_flow_api.g_varchar2_table(106) := '69616C6F6728242E657874656E64287B0A090909097469746C653A202746696C652050726576696577272C0A09090909636C61737365733A207B0A09090909092275692D6469616C6F67223A2022666F732D66696C652D707265766965772D6469616C6F';
-wwv_flow_api.g_varchar2_table(107) := '67220A090909097D2C0A090909096865696768743A2027363030272C0A0909090977696474683A2027373230272C0A090909092F2F6D617857696474683A2027393630272C0A090909096D6F64616C3A20747275652C0A090909096175746F4F70656E3A';
-wwv_flow_api.g_varchar2_table(108) := '20747275652C0A090909096469616C6F673A206E756C6C2C0A09090909627574746F6E733A2070726576696577427574746F6E730A0909097D2C20707265766965774F7074696F6E73207C7C207B7D29293B0A0909092F2F2068696465207363726F6C6C';
-wwv_flow_api.g_varchar2_table(109) := '6261727320696E2063617365206F6620616E7920686569676874206D69736D6174636820776974682074686520696672616D652026206469616C6F670A09090970726576696577242E63737328276F766572666C6F77272C202768696464656E27293B0A';
-wwv_flow_api.g_varchar2_table(110) := '0909092F2F206368616E6765207468652069636F6E7320746F20666F6E742D617065780A09090970726576696577242E706172656E7428292E66696E6428272E75692D627574746F6E202E666127292E72656D6F7665436C617373282775692D62757474';
-wwv_flow_api.g_varchar2_table(111) := '6F6E2D69636F6E2075692D69636F6E27293B0A0909092F2F2073686F77207468652066696C6520707265766965770A090909696672616D65242E617474722827737263272C20636F6E6669672E70726576696577537263293B0A09097D0A0A09092F2F20';
-wwv_flow_api.g_varchar2_table(112) := '696672616D65206F6E6C6F6164206576656E742068616E646C65722C206974206669726573206F6E6C7920696620746865726520697320616E206572726F72206F722069662077652061726520696E2070726576696577206D6F64650A09092F2F207765';
-wwv_flow_api.g_varchar2_table(113) := '206861766520746F20747261636B206120636F6F6B696520666F7220726567756C61722066696C6520646F776E6C6F6164206576656E747320617320746865206F6E6C6F6164206576656E7420646F6573206E6F7420666972650A0909464F532E757469';
-wwv_flow_api.g_varchar2_table(114) := '6C732E646F776E6C6F61645B646F776E6C6F6164466E4E616D655D203D2066756E6374696F6E2028696672616D6529207B0A09090976617220726573756C742C0A09090909726573706F6E73652C0A0909090963616E63656C526573756D65203D206661';
-wwv_flow_api.g_varchar2_table(115) := '6C73652C0A090909096661696C7572654A534F4E203D207B7D2C0A0909090977696E203D2028696672616D652E636F6E74656E7457696E646F77207C7C20696672616D652E636F6E74656E74446F63756D656E74293B0A090909747279207B0A09090909';
-wwv_flow_api.g_varchar2_table(116) := '2F2F2057652077616E7420746F2061646420736F6D65207374796C696E6720746F207468652048544D4C20666F7220696D6167657320652E672E2063656E746572207468656D20686F72697A6F6E74616C6C79202620766572746963616C6C790A090909';
-wwv_flow_api.g_varchar2_table(117) := '0969662028636F6E6669672E707265766965774D6F646529207B0A09090909092866756E6374696F6E202877696E2C20646F6329207B0A0909090909097661722063737331203D2027696D677B2077696474683A2027202B204D6174682E6D617828646F';
-wwv_flow_api.g_varchar2_table(118) := '632E646F63756D656E74456C656D656E742E636C69656E745769647468207C7C20302C2077696E2E696E6E65725769647468207C7C203029202B202770783B207D272C0A09090909090909637373203D2027696D677B6D617267696E2D6C6566743A2061';
-wwv_flow_api.g_varchar2_table(119) := '75746F3B206D617267696E2D72696768743A206175746F3B2077696474683A203530253B20766572746963616C2D616C69676E3A206D6964646C653B6865696768743A206175746F3B7D2027202B0A0909090909090909277370616E2E666F732D696D67';
-wwv_flow_api.g_varchar2_table(120) := '2D68656C7065727B646973706C61793A20696E6C696E652D626C6F636B3B6865696768743A20313030253B766572746963616C2D616C69676E3A206D6964646C653B77696474683A203235253B7D272C0A0909090909090968656164203D20646F632E68';
-wwv_flow_api.g_varchar2_table(121) := '656164207C7C20646F632E676574456C656D656E747342795461674E616D6528276865616427295B305D2C0A09090909090909626F6479203D20646F632E626F6479207C7C20646F632E676574456C656D656E747342795461674E616D652827626F6479';
-wwv_flow_api.g_varchar2_table(122) := '27295B305D2C0A090909090909096973496D616765203D20646F632E676574456C656D656E747342795461674E616D652827696D6727292E6C656E677468203E20302C0A090909090909097374796C65203D20646F632E637265617465456C656D656E74';
-wwv_flow_api.g_varchar2_table(123) := '28277374796C6527292C0A090909090909097370616E203D20646F632E637265617465456C656D656E7428277370616E27293B0A0A0909090909092F2F207765206E65656420746F20616464206120636C61737320746F206D616B65207375726520616E';
-wwv_flow_api.g_varchar2_table(124) := '79207374796C696E67207765206170706C79206973206F6E6C7920666F72207468697320656C656D656E74090A0909090909097370616E2E636C6173734C6973742E6164642827666F732D696D672D68656C70657227293B0A0A09090909090969662028';
-wwv_flow_api.g_varchar2_table(125) := '6865616429207B0A09090909090909686561642E617070656E64287374796C65293B0A0A090909090909097374796C652E74797065203D2027746578742F637373273B0A09090909090909696620287374796C652E7374796C65536865657429207B0A09';
-wwv_flow_api.g_varchar2_table(126) := '090909090909092F2F205468697320697320726571756972656420666F722049453820616E642062656C6F772E0A09090909090909097374796C652E7374796C6553686565742E63737354657874203D206373733B0A090909090909097D20656C736520';
-wwv_flow_api.g_varchar2_table(127) := '7B0A09090909090909097374796C652E617070656E644368696C6428646F632E637265617465546578744E6F64652863737329293B0A090909090909097D0A0A090909090909092F2F204164642061207370616E2074616720706C616365686F6C646572';
-wwv_flow_api.g_varchar2_table(128) := '20746F2063656E7465722074686520696D61676520696E20746865206D6964646C65206F6620746865206469616C6F670A09090909090909696620286973496D6167652920626F64792E70726570656E64287370616E293B0A0909090909097D0A090909';
-wwv_flow_api.g_varchar2_table(129) := '09097D292877696E2C2077696E2E646F63756D656E74293B0A090909097D0A090909092F2F20636C6F6E652074686520636F6E6669670A09090909726573756C74203D20242E657874656E64287B7D2C20636F6E666967293B0A09090909696620287769';
-wwv_flow_api.g_varchar2_table(130) := '6E2E646F63756D656E742E6C6F636174696F6E2E68726566203D3D3D202261626F75743A626C616E6B2229207B0A090909090972657475726E2066616C73653B0A090909097D0A090909092F2F20636865636B206F757220726573706F6E73652C206966';
-wwv_flow_api.g_varchar2_table(131) := '2069742773206F7572206F776E20657863657074696F6E2069742077696C6C2062652061204A534F4E206F626A6563740A09090909747279207B0A0909090909726573706F6E7365203D2077696E2E646F63756D656E742E676574456C656D656E747342';
-wwv_flow_api.g_varchar2_table(132) := '795461674E616D65282270726522295B305D2E696E6E657248544D4C3B0A09090909096661696C7572654A534F4E203D204A534F4E2E706172736528726573706F6E7365293B0A090909097D20636174636820286529207B0A0909090909726573756C74';
-wwv_flow_api.g_varchar2_table(133) := '2E726573706F6E7365203D2077696E2E646F63756D656E743B0A090909097D0A0A09090909726573756C742E6572726F72203D206661696C7572654A534F4E2E6D6573736167653B0A0A0909090969662028726573756C742E6572726F72202626202172';
-wwv_flow_api.g_varchar2_table(134) := '6573756C742E73757070726573734572726F724D6573736167657329207B0A0909090909617065782E6D6573736167652E73686F774572726F7273287B0A090909090909747970653A20276572726F72272C0A0909090909096C6F636174696F6E3A205B';
-wwv_flow_api.g_varchar2_table(135) := '2770616765275D2C0A090909090909706167654974656D3A20756E646566696E65642C0A0909090909096D6573736167653A20726573756C742E6572726F722C0A0909090909092F2F616E79206573636170696E6720697320617373756D656420746F20';
-wwv_flow_api.g_varchar2_table(136) := '68617665206265656E20646F6E65206279206E6F770A090909090909756E736166653A2066616C73650A09090909097D293B0A090909090963616E63656C526573756D65203D20747275653B0A090909097D0A090909092F2F2072656D6F766520616E79';
-wwv_flow_api.g_varchar2_table(137) := '207370696E6E657220616E642072656D6F766520747261636B696E6720696E666F0A09090909636C65616E557028646F776E6C6F6164466E4E616D652C20636F6E6669672E707265766965774D6F6465293B0A090909092F2F2074726967676572207468';
+wwv_flow_api.g_varchar2_table(20) := '736F7228636F6E6669672E74726967676572696E67456C656D656E74242C20227761697422293B20200A0909617474656D7074735B646F776E6C6F6164466E4E616D655D203D2033303B0A0909646F776E6C6F616454696D6572735B646F776E6C6F6164';
+wwv_flow_api.g_varchar2_table(21) := '466E4E616D655D203D2077696E646F772E736574496E74657276616C2866756E6374696F6E202829207B0A09090976617220746F6B656E203D20676574436F6F6B696528646F776E6C6F6164466E4E616D65293B0A0A0909096966202828746F6B656E20';
+wwv_flow_api.g_varchar2_table(22) := '262620746F6B656E2E6E616D65203D3D20646F776E6C6F6164466E4E616D6529207C7C2028617474656D7074735B646F776E6C6F6164466E4E616D655D203D3D20302929207B0A0909090969662028746F6B656E29207B0A0909090909636F6E6669672E';
+wwv_flow_api.g_varchar2_table(23) := '66696C65496E666F203D204A534F4E2E706172736528746F6B656E2E76616C7565293B0A090909090966696C65496E666F5B646F776E6C6F6164466E4E616D655D203D20636F6E6669672E66696C65496E666F3B0A090909097D0A0909090973746F7054';
+wwv_flow_api.g_varchar2_table(24) := '7261636B696E67446F776E6C6F616428636F6E6669672C20646F776E6C6F6164466E4E616D65293B0A0909097D0A0A090909617474656D7074735B646F776E6C6F6164466E4E616D655D2D2D3B0A09097D2C2031303030293B0A0A090972657475726E20';
+wwv_flow_api.g_varchar2_table(25) := '646F776E6C6F6164466E4E616D653B0A097D0A0A0966756E6374696F6E2073746F70547261636B696E67446F776E6C6F616428636F6E6669672C20646F776E6C6F6164466E4E616D6529207B0A0909766172206576656E744E616D65203D2028636F6E66';
+wwv_flow_api.g_varchar2_table(26) := '69672E707265766965774D6F646529203F2027666F732D646F776E6C6F61642D707265766965772D636F6D706C65746527203A2027666F732D646F776E6C6F61642D66696C652D636F6D706C657465273B0A0909636C65616E557028646F776E6C6F6164';
+wwv_flow_api.g_varchar2_table(27) := '466E4E616D652C20636F6E6669672E707265766965774D6F6465293B0A090977696E646F772E636C656172496E74657276616C28646F776E6C6F616454696D6572735B646F776E6C6F6164466E4E616D655D293B0A0909657870697265436F6F6B696528';
+wwv_flow_api.g_varchar2_table(28) := '646F776E6C6F6164466E4E616D65293B0A090964656C65746520646F776E6C6F616454696D6572735B646F776E6C6F6164466E4E616D655D3B0A090964656C65746520617474656D7074735B646F776E6C6F6164466E4E616D655D3B0A09096966202863';
+wwv_flow_api.g_varchar2_table(29) := '6F6E6669672E66696C65496E666F29207B0A090909617065782E6576656E742E7472696767657228646F63756D656E742E626F64792C206576656E744E616D652C20636F6E666967293B0A09090964656C65746520636F6E6669672E66696C65496E666F';
+wwv_flow_api.g_varchar2_table(30) := '3B0A09097D0A0909736574437572736F7228636F6E6669672E74726967676572696E67456C656D656E74242C2027706F696E74657227293B0A097D0A0A092F2F204D61696E20706C75672D696E20656E74727920706F696E740A09464F532E7574696C73';
+wwv_flow_api.g_varchar2_table(31) := '2E646F776E6C6F6164203D2066756E6374696F6E20286461436F6E746578742C206F7074696F6E732C20696E6974466E29207B0A090976617220636F6E6669672C20706C7567696E4E616D65203D2027464F53202D20446F776E6C6F61642046696C6528';
+wwv_flow_api.g_varchar2_table(32) := '7329272C0A0909096D65203D20746869732C0A090909646F776E6C6F6164466E4E616D65203D20676574446F776E6C6F61644964286F7074696F6E732E6964292C0A0909096166456C656D656E7473203D206461436F6E746578742E6166666563746564';
+wwv_flow_api.g_varchar2_table(33) := '456C656D656E74732C0A09090974726967676572696E67456C656D656E74203D206461436F6E746578742E74726967676572696E67456C656D656E743B0A0A0909636F6E666967203D20242E657874656E64287B7D2C206F7074696F6E73293B0A0A0909';
+wwv_flow_api.g_varchar2_table(34) := '617065782E64656275672E696E666F28706C7567696E4E616D652C20636F6E666967293B0A0A090966756E6374696F6E20676574446F776E6C6F6164496428696429207B0A09090972657475726E20544F4B454E5F505245464958202B206964202B206E';
+wwv_flow_api.g_varchar2_table(35) := '6577204461746528292E67657454696D6528293B0A09097D0A0A09092F2F2067656E657261746520612064796E616D696320666F726D2077697468206F75722066696C6520646F776E6C6F616420636F6E7465787420696E666F0A090966756E6374696F';
+wwv_flow_api.g_varchar2_table(36) := '6E20676574466F726D54706C286461746129207B0A09090972657475726E20273C666F726D20616374696F6E3D227777765F666C6F772E73686F7722206D6574686F643D22706F73742220656E63747970653D226D756C7469706172742F666F726D2D64';
+wwv_flow_api.g_varchar2_table(37) := '617461222069643D2227202B20646174612E666F726D4964202B202722207461726765743D2227202B20646174612E696672616D654964202B202722206F6E6C6F61643D22223E27202B0A09090909273C696E70757420747970653D2268696464656E22';
+wwv_flow_api.g_varchar2_table(38) := '206E616D653D22705F666C6F775F6964222076616C75653D2227202B20646174612E6170704964202B2027222069643D2270466C6F7749643222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F66';
+wwv_flow_api.g_varchar2_table(39) := '6C6F775F737465705F6964222076616C75653D2227202B20646174612E706167654964202B2027222069643D2270466C6F775374657049643222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F69';
+wwv_flow_api.g_varchar2_table(40) := '6E7374616E6365222076616C75653D2227202B20646174612E73657373696F6E4964202B2027222069643D2270496E7374616E63653222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F72657175';
+wwv_flow_api.g_varchar2_table(41) := '657374222076616C75653D22504C5547494E3D27202B20646174612E72657175657374202B2027222069643D2270526571756573743222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F64656275';
+wwv_flow_api.g_varchar2_table(42) := '67222076616C75653D2227202B2028646174612E6465627567207C7C20272729202B2027222069643D227044656275673222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22705F7769646765745F6E61';
+wwv_flow_api.g_varchar2_table(43) := '6D65222076616C75653D2227202B2028646174612E7769646765744E616D65207C7C20272729202B2027222069643D22705769646765744E616D653222202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22';
+wwv_flow_api.g_varchar2_table(44) := '705F7769646765745F616374696F6E222076616C75653D2227202B2028646174612E616374696F6E207C7C20272729202B2027222069643D2270576964676574416374696F6E3222202F3E27202B0A09090909273C696E70757420747970653D22686964';
+wwv_flow_api.g_varchar2_table(45) := '64656E22206E616D653D22705F7769646765745F616374696F6E5F6D6F64222076616C75653D2227202B2028646174612E616374696F6E4D6F64207C7C20272729202B2027222069643D2270576964676574416374696F6E4D6F643222202F3E27202B0A';
+wwv_flow_api.g_varchar2_table(46) := '09090909273C696E70757420747970653D2268696464656E22206E616D653D22783031222076616C75653D2227202B2028646174612E783031207C7C20272729202B2027222069643D2278303122202F3E27202B0A09090909273C696E70757420747970';
+wwv_flow_api.g_varchar2_table(47) := '653D2268696464656E22206E616D653D22783032222076616C75653D2227202B2028646174612E70726576696577446F776E6C6F6164207C7C20274E4F2729202B2027222069643D2278303222202F3E27202B0A09090909273C696E7075742074797065';
+wwv_flow_api.g_varchar2_table(48) := '3D2268696464656E22206E616D653D22783033222076616C75653D2227202B2028646174612E783033207C7C20272729202B2027222069643D2278303322202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D';
+wwv_flow_api.g_varchar2_table(49) := '22783034222076616C75653D2227202B2028646174612E783034207C7C20272729202B2027222069643D2278303422202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783035222076616C75653D222720';
+wwv_flow_api.g_varchar2_table(50) := '2B2028646174612E783035207C7C20272729202B2027222069643D2278303522202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783036222076616C75653D2227202B2028646174612E783036207C7C20';
+wwv_flow_api.g_varchar2_table(51) := '272729202B2027222069643D2278303622202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783037222076616C75653D2227202B2028646174612E783037207C7C20272729202B2027222069643D227830';
+wwv_flow_api.g_varchar2_table(52) := '3722202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D22783038222076616C75653D2227202B2028646174612E783038207C7C20272729202B2027222069643D2278303822202F3E27202B0A09090909273C';
+wwv_flow_api.g_varchar2_table(53) := '696E70757420747970653D2268696464656E22206E616D653D22783039222076616C75653D2227202B2028646174612E783039207C7C20272729202B2027222069643D2278303922202F3E27202B0A09090909273C696E70757420747970653D22686964';
+wwv_flow_api.g_varchar2_table(54) := '64656E22206E616D653D22783130222076616C75653D2227202B2028646174612E746F6B656E207C7C20272729202B2027222069643D2278313022202F3E27202B0A09090909273C696E70757420747970653D2268696464656E22206E616D653D226631';
+wwv_flow_api.g_varchar2_table(55) := '30222076616C75653D2227202B2028646174612E663130207C7C20272729202B2027222069643D2266313022202F3E27202B0A09090909273C2F666F726D3E273B0A09097D0A0A09092F2F2067656E657261746520612064796E616D696320696672616D';
+wwv_flow_api.g_varchar2_table(56) := '65206261736564206F6E206F757220646F776E6C6F616420636F6E7465787420696E666F20616E642070726F76696465206120756E69717565206F6E6C6F61642068616E646C65722066756E6374696F6E0A090966756E6374696F6E2067657449667261';
+wwv_flow_api.g_varchar2_table(57) := '6D6554706C28636F6E6669672C20646F776E6C6F6164466E4E616D6529207B0A0909097661722074706C3B0A09090969662028636F6E6669672E707265766965774D6F646529207B0A0909090974706C203D20273C696672616D652069643D2227202B20';
+wwv_flow_api.g_varchar2_table(58) := '636F6E6669672E696672616D654964202B202722206E616D653D2227202B20636F6E6669672E696672616D654964202B2027222077696474683D223130302522206865696768743D223130302522207374796C653D226D696E2D77696474683A20393525';
+wwv_flow_api.g_varchar2_table(59) := '3B6865696768743A313030253B22207363726F6C6C696E673D226175746F2220636C6173733D22666F732D707265766965772D6D6F646520752D68696464656E22206F6E6C6F61643D22464F532E7574696C732E646F776E6C6F61642E27202B20646F77';
+wwv_flow_api.g_varchar2_table(60) := '6E6C6F6164466E4E616D65202B2027287468697329223E3C2F696672616D653E273B0A0909097D20656C7365207B0A0909090974706C203D20273C696672616D652069643D2227202B20636F6E6669672E696672616D654964202B202722206E616D653D';
+wwv_flow_api.g_varchar2_table(61) := '2227202B20636F6E6669672E696672616D654964202B20272220636C6173733D22752D68696464656E22206F6E6C6F61643D22464F532E7574696C732E646F776E6C6F61642E27202B20646F776E6C6F6164466E4E616D65202B2027287468697329223E';
+wwv_flow_api.g_varchar2_table(62) := '3C2F696672616D653E273B0A0909097D0A09090972657475726E2074706C3B0A09097D0A0A09092F2F20726567756C61722066696C6520646F776E6C6F61640A090966756E6374696F6E206174746163686D656E74446F776E6C6F616428666F726D4461';
+wwv_flow_api.g_varchar2_table(63) := '746129207B0A09090976617220666F726D54706C2C20696672616D6554706C2C20666F726D2C20696672616D65242C0A0909090963616E63656C526573756D65203D2066616C73653B0A0A090909666F726D446174612E74726967676572696E67456C65';
+wwv_flow_api.g_varchar2_table(64) := '6D656E7424203D20242874726967676572696E67456C656D656E74293B0A090909666F726D446174612E746F6B656E203D20747261636B446F776E6C6F616428666F726D446174612C20646F776E6C6F6164466E4E616D65293B0A090909666F726D5470';
+wwv_flow_api.g_varchar2_table(65) := '6C203D20676574466F726D54706C28666F726D44617461293B0A090909696672616D6554706C203D20676574496672616D6554706C28666F726D446174612C20646F776E6C6F6164466E4E616D65293B0A0A090909696620282428272327202B20666F72';
+wwv_flow_api.g_varchar2_table(66) := '6D446174612E666F726D4964292E6C656E67746829207B0A090909092428272327202B20666F726D446174612E666F726D4964292E72656D6F766528290A0909097D0A090909666F726D203D202428646F63756D656E742E626F6479292E617070656E64';
+wwv_flow_api.g_varchar2_table(67) := '28666F726D54706C29202626202428272327202B20666F726D446174612E666F726D4964295B305D3B0A090909696672616D6524203D202428272327202B20666F726D446174612E696672616D654964293B0A09090969662028696672616D65242E6C65';
+wwv_flow_api.g_varchar2_table(68) := '6E677468203D3D3D203029207B0A090909092428646F63756D656E742E626F6479292E617070656E6428696672616D6554706C293B0A0909097D20656C7365207B0A09090909696672616D65242E6174747228276F6E6C6F6164272C2027464F532E7574';
+wwv_flow_api.g_varchar2_table(69) := '696C732E646F776E6C6F61642E27202B20646F776E6C6F6164466E4E616D65202B202728746869732927293B0A0909097D0A0909092F2F207375626D6974206F757220666F726D20746F20646F776E6C6F6164207468652066696C650A09090969662028';
+wwv_flow_api.g_varchar2_table(70) := '666F726D20262620666F726D2E7375626D697429207B0A09090909666F726D2E7375626D697428293B0A0909097D20656C7365207B0A0909090963616E63656C526573756D65203D20747275653B0A0909097D0A0909092F2F2074686973206973207265';
+wwv_flow_api.g_varchar2_table(71) := '71756972656420666F72207768656E20776520617265206F70656E696E67206D6F64616C206469616C6F67732C20666F722061637475616C2072656469726563747320746865207061676520756E6C6F616473206D616B696E6720746869732072656475';
+wwv_flow_api.g_varchar2_table(72) := '6E64616E740A09090969662028636F6E6669672E70726576696577446F776E6C6F616420213D20275945532729207B0A09090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C6261636B2C2063616E63656C52';
+wwv_flow_api.g_varchar2_table(73) := '6573756D65293B0A0909097D0A09097D0A0A09092F2F2066696C65207072657669657720696E2061206469616C6F672077697468206F7074696F6E616C20646F776E6C6F616420627574746F6E0A090966756E6374696F6E2070726576696577496E4469';
+wwv_flow_api.g_varchar2_table(74) := '616C6F6728636F6E66696729207B0A090909766172207072657669657724203D202428272327202B20636F6E6669672E707265766965774964292C0A09090909696672616D6524203D202428272327202B20636F6E6669672E696672616D654964292C0A';
+wwv_flow_api.g_varchar2_table(75) := '0909090970726576696577427574746F6E73203D205B5D2C0A09090909707265766965774F7074696F6E73203D20636F6E6669672E707265766965774F7074696F6E733B0A0A0909092F2F20416C6C6F772074686520646576656C6F70657220746F2070';
+wwv_flow_api.g_varchar2_table(76) := '6572666F726D20616E79206C617374202863656E7472616C697A656429206368616E676573207573696E67204A61766173637269707420496E697469616C697A6174696F6E20436F64652073657474696E670A0909092F2F20696E206164646974696F6E';
+wwv_flow_api.g_varchar2_table(77) := '20746F206F757220706C7567696E20636F6E6669672077652077696C6C207061737320696E206120326E64206F626A65637420666F7220636F6E6669677572696E672074686520464F53206E6F74696669636174696F6E730A09090969662028696E6974';
+wwv_flow_api.g_varchar2_table(78) := '466E20696E7374616E63656F662046756E6374696F6E29207B0A09090909696E6974466E2E63616C6C286461436F6E746578742C20636F6E666967293B0A0909097D0A0A09090966756E6374696F6E2067657446696C65496E666F2829207B0A09090909';
+wwv_flow_api.g_varchar2_table(79) := '7661722066696C6544657461696C73203D2066696C65496E666F5B646F776E6C6F6164466E4E616D655D3B0A0909090972657475726E202866696C6544657461696C7329203F2028707265766965774F7074696F6E732E66696C65496E666F54706C207C';
+wwv_flow_api.g_varchar2_table(80) := '7C20273C7374726F6E673E4E616D653A3C2F7374726F6E673E20234E414D45233C6272202F3E27202B0A0909090909273C7374726F6E673E53697A653A3C2F7374726F6E673E202353495A45233C6272202F3E27202B0A0909090909273C7374726F6E67';
+wwv_flow_api.g_varchar2_table(81) := '3E4D696D6520547970653A3C2F7374726F6E673E20234D494D455F545950452327290A09090909092E7265706C616365282F5C234E414D455C232F2C2066696C6544657461696C732E6E616D65290A09090909092E7265706C616365282F5C2353495A45';
+wwv_flow_api.g_varchar2_table(82) := '5C232F2C2066696C6544657461696C732E73697A65290A09090909092E7265706C616365282F5C234D494D455F545950455C232F2C2066696C6544657461696C732E6D696D6554797065290A09090909093A2028707265766965774F7074696F6E732E6C';
+wwv_flow_api.g_varchar2_table(83) := '6F6164696E674D7367207C7C20275468652066696C6520696E666F726D6174696F6E206973207374696C6C206C6F6164696E672E2E2E2E27293B0A0909097D0A0A0909096966202870726576696577242E6C656E677468203D3D3D203029207B0A090909';
+wwv_flow_api.g_varchar2_table(84) := '092428646F63756D656E742E626F6479292E617070656E6428273C6469762069643D2227202B20636F6E6669672E707265766965774964202B2027223E27202B20676574496672616D6554706C28636F6E6669672C20646F776E6C6F6164466E4E616D65';
+wwv_flow_api.g_varchar2_table(85) := '29202B20273C2F6469763E27293B0A09090909696672616D6524203D202428272327202B20636F6E6669672E696672616D654964293B0A090909097072657669657724203D202428272327202B20636F6E6669672E707265766965774964293B0A090909';
+wwv_flow_api.g_varchar2_table(86) := '7D0A090909696672616D65242E72656D6F7665436C6173732827752D68696464656E27293B0A0A0909092F2F2046697265666F7820706F73744D6573736167652068616E646C657220666F722063726F7373206F726967696E2073656375726974792065';
+wwv_flow_api.g_varchar2_table(87) := '7863657074696F6E732073686F77696E67205044462066696C65730A090909242877696E646F77292E6F6E28226D657373616765222C2066756E6374696F6E20286529207B0A090909097661722064617461203D20652E6F726967696E616C4576656E74';
+wwv_flow_api.g_varchar2_table(88) := '2E646174613B0A09090909696620286461746120262620646174612E696672616D654964203D3D3D20636F6E6669672E696672616D65496429207B0A0909090909242874686973292E6F66662865293B202F2F20756E62696E6420746865206576656E74';
+wwv_flow_api.g_varchar2_table(89) := '2068616E646C6572206173206974206D6174636865730A090909090964656C65746520464F532E7574696C732E646F776E6C6F61645B646F776E6C6F6164466E4E616D655D3B202F2F2064656C657465206F75722066756E6374696F6E2068616E646C65';
+wwv_flow_api.g_varchar2_table(90) := '720A0909090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C6261636B2C2066616C7365293B202F2F20726573756D6520666F6C6C6F77696E6720616374696F6E730A090909097D0A0909097D293B0A0A0909';
+wwv_flow_api.g_varchar2_table(91) := '0970726576696577242E6F6E28226469616C6F67726573697A65222C2066756E6374696F6E202829207B0A090909097661722068203D2070726576696577242E68656967687428292C0A090909090977203D2070726576696577242E776964746828293B';
+wwv_flow_api.g_varchar2_table(92) := '0A090909092F2F20726573697A6520696672616D6520736F20746861742061706578206469616C6F67207061676520676574732077696E646F7720726573697A65206576656E740A090909092F2F2075736520776964746820616E642068656967687420';
+wwv_flow_api.g_varchar2_table(93) := '6F66206469616C6F6720636F6E74656E7420726174686572207468616E2075692E73697A6520736F2074686174206469616C6F67207469746C652069732074616B656E20696E20746F20636F6E73696465726174696F6E0A090909097072657669657724';
+wwv_flow_api.g_varchar2_table(94) := '2E6368696C6472656E2822696672616D6522292E77696474682877292E6865696768742868293B0A0909097D293B0A0909090A09090969662028707265766965774F7074696F6E732E73686F7746696C65496E666F29207B0A0909090970726576696577';
+wwv_flow_api.g_varchar2_table(95) := '427574746F6E732E70757368287B0A0909090909746578743A202220222C0A090909090969636F6E3A202266612066612D696E666F20666F732D6469616C6F672D66696C652D696E666F222C0A0909090909636C69636B3A2066756E6374696F6E202865';
+wwv_flow_api.g_varchar2_table(96) := '29207B0A0909090909092428652E746172676574292E746F6F6C746970287B0A090909090909096974656D733A20652E7461726765742C0A09090909090909636F6E74656E743A2067657446696C65496E666F28292C0A09090909090909706F73697469';
+wwv_flow_api.g_varchar2_table(97) := '6F6E3A207B0A09090909090909096D793A202263656E74657220626F74746F6D222C202F2F207468652022616E63686F7220706F696E742220696E2074686520746F6F6C74697020656C656D656E740A090909090909090961743A202263656E74657220';
+wwv_flow_api.g_varchar2_table(98) := '746F702D3130222C202F2F2074686520706F736974696F6E206F66207468617420616E63686F7220706F696E742072656C617469766520746F2073656C656374656420656C656D656E740A090909090909097D2C0A09090909090909636C61737365733A';
+wwv_flow_api.g_varchar2_table(99) := '207B0A09090909090909092275692D746F6F6C746970223A2022666F732D6469616C6F672D66696C652D696E666F2D746F6F6C74697020746F702075692D636F726E65722D616C6C2075692D7769646765742D736861646F77220A090909090909097D0A';
+wwv_flow_api.g_varchar2_table(100) := '0909090909097D293B0A0909090909092428652E746172676574292E746F6F6C74697028226F70656E22293B0A09090909097D0A090909097D293B0A0909097D0A09090969662028707265766965774F7074696F6E732E73686F77446F776E6C6F616442';
+wwv_flow_api.g_varchar2_table(101) := '746E29207B0A0909090970726576696577427574746F6E732E70757368287B0A0909090909746578743A2022446F776E6C6F6164222C0A090909090969636F6E3A202266612066612D646F776E6C6F6164222C0A0909090909636C69636B3A2066756E63';
+wwv_flow_api.g_varchar2_table(102) := '74696F6E202829207B0A090909090909464F532E7574696C732E646F776E6C6F6164286461436F6E746578742C0A09090909090909242E657874656E64287B7D2C0A0909090909090909636F6E6669672C207B0A0909090909090909707265766965774D';
+wwv_flow_api.g_varchar2_table(103) := '6F64653A2066616C73652C0A090909090909090970726576696577446F776E6C6F61643A202759455327202F2F20746F20696E6469636174652077652061726520646F776E6C6F6164696E672066726F6D2077697468696E2070726576696577206D6F64';
+wwv_flow_api.g_varchar2_table(104) := '650A090909090909097D290A090909090909293B0A09090909097D2C0A0909090909636C61737365733A207B0A0909090909092275692D746F6F6C746970223A2022666F732D6469616C6F672D66696C652D646F776E6C6F61642D62746E20752D686F74';
+wwv_flow_api.g_varchar2_table(105) := '2075692D636F726E65722D616C6C2075692D7769646765742D736861646F77220A09090909097D0A090909097D293B0A0909097D0A0909092F2F20696E697469616C697A65207468652070726576696577206469616C6F670A0909097072657669657724';
+wwv_flow_api.g_varchar2_table(106) := '2E6469616C6F6728242E657874656E64287B0A090909097469746C653A202746696C652050726576696577272C0A09090909636C61737365733A207B0A09090909092275692D6469616C6F67223A2022666F732D66696C652D707265766965772D646961';
+wwv_flow_api.g_varchar2_table(107) := '6C6F67220A090909097D2C0A090909096865696768743A2027363030272C0A0909090977696474683A2027373230272C0A090909092F2F6D617857696474683A2027393630272C0A090909096D6F64616C3A20747275652C0A090909096175746F4F7065';
+wwv_flow_api.g_varchar2_table(108) := '6E3A20747275652C0A090909096469616C6F673A206E756C6C2C0A09090909627574746F6E733A2070726576696577427574746F6E730A0909097D2C20707265766965774F7074696F6E73207C7C207B7D29293B0A0909092F2F2068696465207363726F';
+wwv_flow_api.g_varchar2_table(109) := '6C6C6261727320696E2063617365206F6620616E7920686569676874206D69736D6174636820776974682074686520696672616D652026206469616C6F670A09090970726576696577242E63737328276F766572666C6F77272C202768696464656E2729';
+wwv_flow_api.g_varchar2_table(110) := '3B0A0909092F2F206368616E6765207468652069636F6E7320746F20666F6E742D617065780A09090970726576696577242E706172656E7428292E66696E6428272E75692D627574746F6E202E666127292E72656D6F7665436C617373282775692D6275';
+wwv_flow_api.g_varchar2_table(111) := '74746F6E2D69636F6E2075692D69636F6E27293B0A0909092F2F2073686F77207468652066696C6520707265766965770A090909696672616D65242E617474722827737263272C20636F6E6669672E70726576696577537263293B0A09097D0A0A09092F';
+wwv_flow_api.g_varchar2_table(112) := '2F20696672616D65206F6E6C6F6164206576656E742068616E646C65722C206974206669726573206F6E6C7920696620746865726520697320616E206572726F72206F722069662077652061726520696E2070726576696577206D6F64650A09092F2F20';
+wwv_flow_api.g_varchar2_table(113) := '7765206861766520746F20747261636B206120636F6F6B696520666F7220726567756C61722066696C6520646F776E6C6F6164206576656E747320617320746865206F6E6C6F6164206576656E7420646F6573206E6F7420666972650A0909464F532E75';
+wwv_flow_api.g_varchar2_table(114) := '74696C732E646F776E6C6F61645B646F776E6C6F6164466E4E616D655D203D2066756E6374696F6E2028696672616D6529207B0A09090976617220726573756C742C0A09090909726573706F6E73652C0A0909090963616E63656C526573756D65203D20';
+wwv_flow_api.g_varchar2_table(115) := '66616C73652C0A090909096661696C7572654A534F4E203D207B7D2C0A0909090977696E203D2028696672616D652E636F6E74656E7457696E646F77207C7C20696672616D652E636F6E74656E74446F63756D656E74293B0A090909747279207B0A0909';
+wwv_flow_api.g_varchar2_table(116) := '09092F2F2057652077616E7420746F2061646420736F6D65207374796C696E6720746F207468652048544D4C20666F7220696D6167657320652E672E2063656E746572207468656D20686F72697A6F6E74616C6C79202620766572746963616C6C790A09';
+wwv_flow_api.g_varchar2_table(117) := '09090969662028636F6E6669672E707265766965774D6F646529207B0A09090909092866756E6374696F6E202877696E2C20646F6329207B0A0909090909097661722063737331203D2027696D677B2077696474683A2027202B204D6174682E6D617828';
+wwv_flow_api.g_varchar2_table(118) := '646F632E646F63756D656E74456C656D656E742E636C69656E745769647468207C7C20302C2077696E2E696E6E65725769647468207C7C203029202B202770783B207D272C0A09090909090909637373203D2027696D677B6D617267696E2D6C6566743A';
+wwv_flow_api.g_varchar2_table(119) := '206175746F3B206D617267696E2D72696768743A206175746F3B2077696474683A203530253B20766572746963616C2D616C69676E3A206D6964646C653B6865696768743A206175746F3B7D2027202B0A0909090909090909277370616E2E666F732D69';
+wwv_flow_api.g_varchar2_table(120) := '6D672D68656C7065727B646973706C61793A20696E6C696E652D626C6F636B3B6865696768743A20313030253B766572746963616C2D616C69676E3A206D6964646C653B77696474683A203235253B7D272C0A0909090909090968656164203D20646F63';
+wwv_flow_api.g_varchar2_table(121) := '2E68656164207C7C20646F632E676574456C656D656E747342795461674E616D6528276865616427295B305D2C0A09090909090909626F6479203D20646F632E626F6479207C7C20646F632E676574456C656D656E747342795461674E616D652827626F';
+wwv_flow_api.g_varchar2_table(122) := '647927295B305D2C0A090909090909096973496D616765203D20646F632E676574456C656D656E747342795461674E616D652827696D6727292E6C656E677468203E20302C0A090909090909097374796C65203D20646F632E637265617465456C656D65';
+wwv_flow_api.g_varchar2_table(123) := '6E7428277374796C6527292C0A090909090909097370616E203D20646F632E637265617465456C656D656E7428277370616E27293B0A0A0909090909092F2F207765206E65656420746F20616464206120636C61737320746F206D616B65207375726520';
+wwv_flow_api.g_varchar2_table(124) := '616E79207374796C696E67207765206170706C79206973206F6E6C7920666F72207468697320656C656D656E74090A0909090909097370616E2E636C6173734C6973742E6164642827666F732D696D672D68656C70657227293B0A0A0909090909096966';
+wwv_flow_api.g_varchar2_table(125) := '20286865616429207B0A09090909090909686561642E617070656E64287374796C65293B0A0A090909090909097374796C652E74797065203D2027746578742F637373273B0A09090909090909696620287374796C652E7374796C65536865657429207B';
+wwv_flow_api.g_varchar2_table(126) := '0A09090909090909092F2F205468697320697320726571756972656420666F722049453820616E642062656C6F772E0A09090909090909097374796C652E7374796C6553686565742E63737354657874203D206373733B0A090909090909097D20656C73';
+wwv_flow_api.g_varchar2_table(127) := '65207B0A09090909090909097374796C652E617070656E644368696C6428646F632E637265617465546578744E6F64652863737329293B0A090909090909097D0A0A090909090909092F2F204164642061207370616E2074616720706C616365686F6C64';
+wwv_flow_api.g_varchar2_table(128) := '657220746F2063656E7465722074686520696D61676520696E20746865206D6964646C65206F6620746865206469616C6F670A09090909090909696620286973496D6167652920626F64792E70726570656E64287370616E293B0A0909090909097D0A09';
+wwv_flow_api.g_varchar2_table(129) := '090909097D292877696E2C2077696E2E646F63756D656E74293B0A090909097D0A090909092F2F20636C6F6E652074686520636F6E6669670A09090909726573756C74203D20242E657874656E64287B7D2C20636F6E666967293B0A0909090969662028';
+wwv_flow_api.g_varchar2_table(130) := '77696E2E646F63756D656E742E6C6F636174696F6E2E68726566203D3D3D202261626F75743A626C616E6B2229207B0A090909090972657475726E2066616C73653B0A090909097D0A090909092F2F20636865636B206F757220726573706F6E73652C20';
 
-wwv_flow_api.g_varchar2_table(138) := '65206576656E7420736F20646576656C6F706572732063616E20726573706F6E6420746F2069740A09090909617065782E6576656E742E7472696767657228646F63756D656E742E626F64792C2027666F732D646F776E6C6F61642D66696C652D657272';
-wwv_flow_api.g_varchar2_table(139) := '6F72272C20726573756C74293B0A0909090969662028636F6E6669672E70726576696577446F776E6C6F616420213D20275945532729207B0A0909090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C626163';
-wwv_flow_api.g_varchar2_table(140) := '6B2C2063616E63656C526573756D65293B0A090909097D0A0909090964656C65746520464F532E7574696C732E646F776E6C6F61645B646F776E6C6F6164466E4E616D655D3B0A0909097D20636174636820286529207B0A090909092F2F20636F646520';
-wwv_flow_api.g_varchar2_table(141) := '3138203D2063726F7373206F726967696E2069737375652028666F722066697265666F78290A0909090969662028652E636F6465203D3D20313829207B0A090909090977696E2E706172656E742E706F73744D657373616765287B20696672616D654964';
-wwv_flow_api.g_varchar2_table(142) := '3A20696672616D652E6964207D293B0A090909097D0A0909097D0A09097D3B0A09092F2A2A0A0909202A204D61696E2050726F63657373696E672053656374696F6E0A0909202A2F0A0A09092F2F20416C6C6F772074686520646576656C6F7065722074';
-wwv_flow_api.g_varchar2_table(143) := '6F20706572666F726D20616E79206C617374202863656E7472616C697A656429206368616E676573207573696E67204A61766173637269707420496E697469616C697A6174696F6E20436F64652073657474696E670A09092F2F20696E20616464697469';
-wwv_flow_api.g_varchar2_table(144) := '6F6E20746F206F757220706C7567696E20636F6E6669672077652077696C6C207061737320696E206120326E64206F626A65637420666F7220636F6E6669677572696E672074686520464F53206E6F74696669636174696F6E730A090969662028696E69';
-wwv_flow_api.g_varchar2_table(145) := '74466E20696E7374616E63656F662046756E6374696F6E29207B0A090909696E6974466E2E63616C6C286461436F6E746578742C20636F6E666967293B0A09097D0A0A0909766172206C6F6164696E67496E64696361746F72466E2C0A09090972657175';
-wwv_flow_api.g_varchar2_table(146) := '65737444617461203D207B2022783031223A20646F776E6C6F6164466E4E616D652C2022783032223A20636F6E6669672E70726576696577446F776E6C6F6164207D2C0A0909097370696E6E657253657474696E6773203D20636F6E6669672E7370696E';
-wwv_flow_api.g_varchar2_table(147) := '6E657253657474696E67733B0A0A09092F2F20496E2070726576696577206D6F6465207765206E65656420746F2073656E642074686520746F6B656E2061732074686520414A41582063616C6C2072657475726E732074686520696672616D652055524C';
-wwv_flow_api.g_varchar2_table(148) := '20666F7220746865207072657669657720616E64206974206E656564732074686520746F6B656E0A090969662028636F6E6669672E707265766965774D6F646529207B0A090909636F6E6669672E746F6B656E203D20747261636B446F776E6C6F616428';
-wwv_flow_api.g_varchar2_table(149) := '636F6E6669672C20646F776E6C6F6164466E4E616D65293B0A09090972657175657374446174612E783130203D20636F6E6669672E746F6B656E3B0A09097D0A0A09092F2F204164642070616765206974656D7320746F207375626D697420746F207265';
-wwv_flow_api.g_varchar2_table(150) := '71756573740A090969662028636F6E6669672E6974656D73546F5375626D697429207B0A09090972657175657374446174612E706167654974656D73203D20636F6E6669672E6974656D73546F5375626D69740A09097D0A0A09092F2F636F6E66696775';
-wwv_flow_api.g_varchar2_table(151) := '726573207468652073686F77696E6720616E6420686964696E67206F66206120706F737369626C65207370696E6E65720A0909696620287370696E6E657253657474696E67732E73686F775370696E6E657229207B0A0A0909092F2F20776F726B206F75';
-wwv_flow_api.g_varchar2_table(152) := '7420776865726520746F2073686F7720746865207370696E6E65720A0909097370696E6E657253657474696E67732E7370696E6E6572456C656D656E74203D20287370696E6E657253657474696E67732E73686F775370696E6E65724F6E526567696F6E';
-wwv_flow_api.g_varchar2_table(153) := '29203F206166456C656D656E7473203A2027626F6479273B0A0909096C6F6164696E67496E64696361746F72466E203D202866756E6374696F6E2028656C656D656E742C2073686F774F7665726C617929207B0A090909097661722066697865644F6E42';
-wwv_flow_api.g_varchar2_table(154) := '6F6479203D20656C656D656E74203D3D2027626F6479273B0A0909090972657475726E2066756E6374696F6E2028704C6F6164696E67496E64696361746F7229207B0A0909090909766172206F7665726C6179243B0A0909090909766172207370696E6E';
-wwv_flow_api.g_varchar2_table(155) := '657224203D20617065782E7574696C2E73686F775370696E6E657228656C656D656E742C207B2066697865643A2066697865644F6E426F6479207D293B0A09090909096966202873686F774F7665726C617929207B0A0909090909096F7665726C617924';
-wwv_flow_api.g_varchar2_table(156) := '203D202428273C64697620636C6173733D22666F732D726567696F6E2D6F7665726C617927202B202866697865644F6E426F6479203F20272D666978656427203A20272729202B2027223E3C2F6469763E27292E70726570656E64546F28656C656D656E';
-wwv_flow_api.g_varchar2_table(157) := '74293B0A09090909097D0A09090909092F2F20646566696E65206F7572207370696E6E65722072656D6F76616C2066756E6374696F6E0A090909090966756E6374696F6E2072656D6F76655370696E6E65722829207B0A090909090909696620286F7665';
-wwv_flow_api.g_varchar2_table(158) := '726C61792429207B0A090909090909096F7665726C6179242E72656D6F766528293B0A0909090909097D0A0909090909097370696E6E6572242E72656D6F766528293B0A09090909097D0A09090909092F2F2072657475726E20612066756E6374696F6E';
-wwv_flow_api.g_varchar2_table(159) := '2077686963682068616E646C6573207468652072656D6F76696E67206F6620746865207370696E6E65722061732070657220617065782067756964656C696E65730A090909090972657475726E2072656D6F76655370696E6E65723B0A090909097D3B0A';
-wwv_flow_api.g_varchar2_table(160) := '0909097D29287370696E6E657253657474696E67732E7370696E6E6572456C656D656E742C207370696E6E657253657474696E67732E73686F775370696E6E65724F7665726C6179293B0A09097D0A0A09092F2F20747261636B20746865207370696E6E';
-wwv_flow_api.g_varchar2_table(161) := '657220696E206120676C6F62616C207661726961626C6520746F2072656D6F7665206C617465720A090969662028747970656F66206C6F6164696E67496E64696361746F72466E203D3D3D202266756E6374696F6E2229207B0A090909646F776E6C6F61';
-wwv_flow_api.g_varchar2_table(162) := '645370696E6E6572735B646F776E6C6F6164466E4E616D655D203D206C6F6164696E67496E64696361746F72466E2E63616C6C286D65293B0A09097D0A0A09092F2F205375626D697420616E792070616765206974656D73206265666F72652070657266';
-wwv_flow_api.g_varchar2_table(163) := '6F726D696E67206F757220666F726D207375626D6974202620646F776E6C6F61640A09092F2F20776520646F6E2774207375626D6974207468652070616765206974656D73206F757273656C76657320696E207468652064796E616D696320666F726D20';
-wwv_flow_api.g_varchar2_table(164) := '0A09092F2F2061732074686572652773207175697465206120626974206F66206C6F67696320746F20646F2069740A09097661722070726F6D697365203D20617065782E7365727665722E706C7567696E28636F6E6669672E616A61784964656E746966';
-wwv_flow_api.g_varchar2_table(165) := '6965722C2072657175657374446174612C207B0A09090964617461547970653A20276A736F6E272C0A0909097461726765743A206461436F6E746578742E62726F777365724576656E742E7461726765740A09097D293B0A0A09092F2F20446F776E6C6F';
-wwv_flow_api.g_varchar2_table(166) := '6164206166746572207375626D697474696E6720616E79206974656D732C2077652072657475726E2074686520636F6E66696720726571756972656420746F20646F776E6C6F616420696E2074686520617065782E7365727665722E706C7567696E2063';
-wwv_flow_api.g_varchar2_table(167) := '616C6C0A090970726F6D6973652E646F6E652866756E6374696F6E2028726573706F6E736529207B0A09090969662028636F6E6669672E707265766965774D6F646529207B0A0909090970726576696577496E4469616C6F6728726573706F6E73652E64';
-wwv_flow_api.g_varchar2_table(168) := '617461293B0A0909097D20656C73652069662028636F6E6669672E6E657757696E646F7729207B0A09090909617065782E6E617669676174696F6E2E6F70656E496E4E657757696E646F7728726573706F6E73652E646174612E70726576696577537263';
-wwv_flow_api.g_varchar2_table(169) := '293B0A09090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C6261636B2C2066616C7365293B0A0909097D20656C7365207B0A090909096174746163686D656E74446F776E6C6F616428726573706F6E73652E';
-wwv_flow_api.g_varchar2_table(170) := '64617461293B0A0909097D0A09097D292E63617463682866756E6374696F6E202865727229207B0A090909636F6E6669672E6572726F72203D206572723B0A090909636C65616E557028646F776E6C6F6164466E4E616D652C20636F6E6669672E707265';
-wwv_flow_api.g_varchar2_table(171) := '766965774D6F6465293B0A090909617065782E6576656E742E7472696767657228646F63756D656E742E626F64792C2027666F732D646F776E6C6F61642D66696C652D6572726F72272C20636F6E666967293B0A09097D293B0A097D3B0A7D2928617065';
-wwv_flow_api.g_varchar2_table(172) := '782E6A5175657279293B';
+wwv_flow_api.g_varchar2_table(131) := '69662069742773206F7572206F776E20657863657074696F6E2069742077696C6C2062652061204A534F4E206F626A6563740A09090909747279207B0A0909090909726573706F6E7365203D2077696E2E646F63756D656E742E676574456C656D656E74';
+wwv_flow_api.g_varchar2_table(132) := '7342795461674E616D65282270726522295B305D2E696E6E657248544D4C3B0A09090909096661696C7572654A534F4E203D204A534F4E2E706172736528726573706F6E7365293B0A090909097D20636174636820286529207B0A090909090972657375';
+wwv_flow_api.g_varchar2_table(133) := '6C742E726573706F6E7365203D2077696E2E646F63756D656E743B0A090909097D0A0A09090909726573756C742E6572726F72203D206661696C7572654A534F4E2E6D6573736167653B0A0A0909090969662028726573756C742E6572726F7220262620';
+wwv_flow_api.g_varchar2_table(134) := '21726573756C742E73757070726573734572726F724D6573736167657329207B0A0909090909617065782E6D6573736167652E73686F774572726F7273287B0A090909090909747970653A20276572726F72272C0A0909090909096C6F636174696F6E3A';
+wwv_flow_api.g_varchar2_table(135) := '205B2770616765275D2C0A090909090909706167654974656D3A20756E646566696E65642C0A0909090909096D6573736167653A20726573756C742E6572726F722C0A0909090909092F2F616E79206573636170696E6720697320617373756D65642074';
+wwv_flow_api.g_varchar2_table(136) := '6F2068617665206265656E20646F6E65206279206E6F770A090909090909756E736166653A2066616C73650A09090909097D293B0A090909090963616E63656C526573756D65203D20747275653B0A090909097D0A090909092F2F2072656D6F76652061';
+wwv_flow_api.g_varchar2_table(137) := '6E79207370696E6E657220616E642072656D6F766520747261636B696E6720696E666F0A09090909636C65616E557028646F776E6C6F6164466E4E616D652C20636F6E6669672E707265766965774D6F6465293B0A090909092F2F207472696767657220';
+wwv_flow_api.g_varchar2_table(138) := '746865206576656E7420736F20646576656C6F706572732063616E20726573706F6E6420746F2069740A09090909617065782E6576656E742E7472696767657228646F63756D656E742E626F64792C2027666F732D646F776E6C6F61642D66696C652D65';
+wwv_flow_api.g_varchar2_table(139) := '72726F72272C20726573756C74293B0A0909090969662028636F6E6669672E70726576696577446F776E6C6F616420213D20275945532729207B0A0909090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C62';
+wwv_flow_api.g_varchar2_table(140) := '61636B2C2063616E63656C526573756D65293B0A090909097D0A0909090964656C65746520464F532E7574696C732E646F776E6C6F61645B646F776E6C6F6164466E4E616D655D3B0A0909097D20636174636820286529207B0A090909092F2F20636F64';
+wwv_flow_api.g_varchar2_table(141) := '65203138203D2063726F7373206F726967696E2069737375652028666F722066697265666F78290A0909090969662028652E636F6465203D3D20313829207B0A090909090977696E2E706172656E742E706F73744D657373616765287B20696672616D65';
+wwv_flow_api.g_varchar2_table(142) := '49643A20696672616D652E6964207D293B0A090909097D0A0909097D0A09097D3B0A09092F2A2A0A0909202A204D61696E2050726F63657373696E672053656374696F6E0A0909202A2F0A0A09092F2F20416C6C6F772074686520646576656C6F706572';
+wwv_flow_api.g_varchar2_table(143) := '20746F20706572666F726D20616E79206C617374202863656E7472616C697A656429206368616E676573207573696E67204A61766173637269707420496E697469616C697A6174696F6E20436F64652073657474696E670A09092F2F20696E2061646469';
+wwv_flow_api.g_varchar2_table(144) := '74696F6E20746F206F757220706C7567696E20636F6E6669672077652077696C6C207061737320696E206120326E64206F626A65637420666F7220636F6E6669677572696E672074686520464F53206E6F74696669636174696F6E730A09096966202869';
+wwv_flow_api.g_varchar2_table(145) := '6E6974466E20696E7374616E63656F662046756E6374696F6E29207B0A090909696E6974466E2E63616C6C286461436F6E746578742C20636F6E666967293B0A09097D0A0A0909766172206C6F6164696E67496E64696361746F72466E2C0A0909097265';
+wwv_flow_api.g_varchar2_table(146) := '717565737444617461203D207B2022783031223A20646F776E6C6F6164466E4E616D652C2022783032223A20636F6E6669672E70726576696577446F776E6C6F6164207D2C0A0909097370696E6E657253657474696E6773203D20636F6E6669672E7370';
+wwv_flow_api.g_varchar2_table(147) := '696E6E657253657474696E67733B0A0A09092F2F20496E2070726576696577206D6F6465207765206E65656420746F2073656E642074686520746F6B656E2061732074686520414A41582063616C6C2072657475726E732074686520696672616D652055';
+wwv_flow_api.g_varchar2_table(148) := '524C20666F7220746865207072657669657720616E64206974206E656564732074686520746F6B656E0A090969662028636F6E6669672E707265766965774D6F646529207B0A090909636F6E6669672E746F6B656E203D20747261636B446F776E6C6F61';
+wwv_flow_api.g_varchar2_table(149) := '6428636F6E6669672C20646F776E6C6F6164466E4E616D65293B0A09090972657175657374446174612E783130203D20636F6E6669672E746F6B656E3B0A09097D0A0A09092F2F204164642070616765206974656D7320746F207375626D697420746F20';
+wwv_flow_api.g_varchar2_table(150) := '726571756573740A090969662028636F6E6669672E6974656D73546F5375626D697429207B0A09090972657175657374446174612E706167654974656D73203D20636F6E6669672E6974656D73546F5375626D69740A09097D0A0A09092F2F636F6E6669';
+wwv_flow_api.g_varchar2_table(151) := '6775726573207468652073686F77696E6720616E6420686964696E67206F66206120706F737369626C65207370696E6E65720A0909696620287370696E6E657253657474696E67732E73686F775370696E6E657229207B0A0A0909092F2F20776F726B20';
+wwv_flow_api.g_varchar2_table(152) := '6F757420776865726520746F2073686F7720746865207370696E6E65720A0909097370696E6E657253657474696E67732E7370696E6E6572456C656D656E74203D20287370696E6E657253657474696E67732E73686F775370696E6E65724F6E52656769';
+wwv_flow_api.g_varchar2_table(153) := '6F6E29203F206166456C656D656E7473203A2027626F6479273B0A0909096C6F6164696E67496E64696361746F72466E203D202866756E6374696F6E2028656C656D656E742C2073686F774F7665726C617929207B0A090909097661722066697865644F';
+wwv_flow_api.g_varchar2_table(154) := '6E426F6479203D20656C656D656E74203D3D2027626F6479273B0A0909090972657475726E2066756E6374696F6E2028704C6F6164696E67496E64696361746F7229207B0A0909090909766172206F7665726C6179243B0A090909090976617220737069';
+wwv_flow_api.g_varchar2_table(155) := '6E6E657224203D20617065782E7574696C2E73686F775370696E6E657228656C656D656E742C207B2066697865643A2066697865644F6E426F6479207D293B0A09090909096966202873686F774F7665726C617929207B0A0909090909096F7665726C61';
+wwv_flow_api.g_varchar2_table(156) := '7924203D202428273C64697620636C6173733D22666F732D726567696F6E2D6F7665726C617927202B202866697865644F6E426F6479203F20272D666978656427203A20272729202B2027223E3C2F6469763E27292E70726570656E64546F28656C656D';
+wwv_flow_api.g_varchar2_table(157) := '656E74293B0A09090909097D0A09090909092F2F20646566696E65206F7572207370696E6E65722072656D6F76616C2066756E6374696F6E0A090909090966756E6374696F6E2072656D6F76655370696E6E65722829207B0A090909090909696620286F';
+wwv_flow_api.g_varchar2_table(158) := '7665726C61792429207B0A090909090909096F7665726C6179242E72656D6F766528293B0A0909090909097D0A0909090909097370696E6E6572242E72656D6F766528293B0A09090909097D0A09090909092F2F2072657475726E20612066756E637469';
+wwv_flow_api.g_varchar2_table(159) := '6F6E2077686963682068616E646C6573207468652072656D6F76696E67206F6620746865207370696E6E65722061732070657220617065782067756964656C696E65730A090909090972657475726E2072656D6F76655370696E6E65723B0A090909097D';
+wwv_flow_api.g_varchar2_table(160) := '3B0A0909097D29287370696E6E657253657474696E67732E7370696E6E6572456C656D656E742C207370696E6E657253657474696E67732E73686F775370696E6E65724F7665726C6179293B0A09097D0A0A09092F2F20747261636B2074686520737069';
+wwv_flow_api.g_varchar2_table(161) := '6E6E657220696E206120676C6F62616C207661726961626C6520746F2072656D6F7665206C617465720A090969662028747970656F66206C6F6164696E67496E64696361746F72466E203D3D3D202266756E6374696F6E2229207B0A090909646F776E6C';
+wwv_flow_api.g_varchar2_table(162) := '6F61645370696E6E6572735B646F776E6C6F6164466E4E616D655D203D206C6F6164696E67496E64696361746F72466E2E63616C6C286D65293B0A09097D0A0A09092F2F205375626D697420616E792070616765206974656D73206265666F7265207065';
+wwv_flow_api.g_varchar2_table(163) := '72666F726D696E67206F757220666F726D207375626D6974202620646F776E6C6F61640A09092F2F20776520646F6E2774207375626D6974207468652070616765206974656D73206F757273656C76657320696E207468652064796E616D696320666F72';
+wwv_flow_api.g_varchar2_table(164) := '6D200A09092F2F2061732074686572652773207175697465206120626974206F66206C6F67696320746F20646F2069740A09097661722070726F6D697365203D20617065782E7365727665722E706C7567696E28636F6E6669672E616A61784964656E74';
+wwv_flow_api.g_varchar2_table(165) := '69666965722C2072657175657374446174612C207B0A09090964617461547970653A20276A736F6E272C0A0909097461726765743A206461436F6E746578742E62726F777365724576656E742E7461726765740A09097D293B0A0A09092F2F20446F776E';
+wwv_flow_api.g_varchar2_table(166) := '6C6F6164206166746572207375626D697474696E6720616E79206974656D732C2077652072657475726E2074686520636F6E66696720726571756972656420746F20646F776E6C6F616420696E2074686520617065782E7365727665722E706C7567696E';
+wwv_flow_api.g_varchar2_table(167) := '2063616C6C0A090970726F6D6973652E646F6E652866756E6374696F6E2028726573706F6E736529207B0A09090969662028636F6E6669672E707265766965774D6F646529207B0A0909090970726576696577496E4469616C6F6728726573706F6E7365';
+wwv_flow_api.g_varchar2_table(168) := '2E64617461293B0A0909097D20656C73652069662028636F6E6669672E6E657757696E646F7729207B0A09090909617065782E6E617669676174696F6E2E6F70656E496E4E657757696E646F7728726573706F6E73652E646174612E7072657669657753';
+wwv_flow_api.g_varchar2_table(169) := '7263293B0A09090909617065782E64612E726573756D65286461436F6E746578742E726573756D6543616C6C6261636B2C2066616C7365293B0A0909097D20656C7365207B0A090909096174746163686D656E74446F776E6C6F616428726573706F6E73';
+wwv_flow_api.g_varchar2_table(170) := '652E64617461293B0A0909097D0A09097D292E63617463682866756E6374696F6E202865727229207B0A090909636F6E6669672E6572726F72203D206572723B0A090909636C65616E557028646F776E6C6F6164466E4E616D652C20636F6E6669672E70';
+wwv_flow_api.g_varchar2_table(171) := '7265766965774D6F6465293B0A090909617065782E6576656E742E7472696767657228646F63756D656E742E626F64792C2027666F732D646F776E6C6F61642D66696C652D6572726F72272C20636F6E666967293B0A09097D293B0A097D3B0A7D292861';
+wwv_flow_api.g_varchar2_table(172) := '7065782E6A5175657279293B';
 null;
 end;
 /
@@ -1595,6 +1595,7 @@ wwv_flow_api.g_varchar2_table(3) := '2C2272656D6F7665222C22747261636B446F776E6C6
 wwv_flow_api.g_varchar2_table(4) := '6E74222C22636F6F6B6965222C2273706C6974222C226C656E677468222C2276616C7565222C227368696674222C22676574436F6F6B6965222C224A534F4E222C227061727365222C226576656E744E616D65222C22636C656172496E74657276616C22';
 wwv_flow_api.g_varchar2_table(5) := '2C22636F6F6B69654E616D65222C22656E636F6465555249436F6D706F6E656E74222C2244617465222C22746F555443537472696E67222C2261706578222C226576656E74222C2274726967676572222C22626F6479222C2273746F70547261636B696E';
 wwv_flow_api.g_varchar2_table(6) := '67446F776E6C6F6164222C22646F776E6C6F6164222C226461436F6E74657874222C226F7074696F6E73222C22696E6974466E222C226964222C2267657454696D65222C226166456C656D656E7473222C226166666563746564456C656D656E7473222C';
+
 wwv_flow_api.g_varchar2_table(7) := '2274726967676572696E67456C656D656E74222C22676574496672616D6554706C222C22696672616D654964222C22657874656E64222C226465627567222C22696E666F222C22696672616D65222C22726573756C74222C22726573706F6E7365222C22';
 wwv_flow_api.g_varchar2_table(8) := '63616E63656C526573756D65222C226661696C7572654A534F4E222C2277696E222C22636F6E74656E7457696E646F77222C22636F6E74656E74446F63756D656E74222C22646F63222C224D617468222C226D6178222C22646F63756D656E74456C656D';
 wwv_flow_api.g_varchar2_table(9) := '656E74222C22636C69656E745769647468222C22696E6E65725769647468222C22637373222C2268656164222C22676574456C656D656E747342795461674E616D65222C226973496D616765222C227374796C65222C22637265617465456C656D656E74';
@@ -1603,7 +1604,6 @@ wwv_flow_api.g_varchar2_table(11) := '6570656E64222C226C6F636174696F6E222C226872
 wwv_flow_api.g_varchar2_table(12) := '654974656D222C22756E646566696E6564222C22756E73616665222C2270726576696577446F776E6C6F6164222C226461222C22726573756D65222C22726573756D6543616C6C6261636B222C22636F6465222C22706172656E74222C22706F73744D65';
 wwv_flow_api.g_varchar2_table(13) := '7373616765222C2246756E6374696F6E222C2263616C6C222C226C6F6164696E67496E64696361746F72466E222C22656C656D656E74222C2273686F774F7665726C6179222C2266697865644F6E426F6479222C227265717565737444617461222C2278';
 wwv_flow_api.g_varchar2_table(14) := '3031222C22783032222C227370696E6E657253657474696E6773222C22783130222C226974656D73546F5375626D6974222C22706167654974656D73222C2273686F775370696E6E6572222C227370696E6E6572456C656D656E74222C2273686F775370';
-
 wwv_flow_api.g_varchar2_table(15) := '696E6E65724F7665726C6179222C22704C6F6164696E67496E64696361746F72222C226F7665726C617924222C227370696E6E657224222C227574696C222C226669786564222C2270726570656E64546F222C2274686973222C22736572766572222C22';
 wwv_flow_api.g_varchar2_table(16) := '706C7567696E222C22616A61784964656E746966696572222C226461746154797065222C22746172676574222C2262726F777365724576656E74222C22646F6E65222C22666F726D44617461222C22666F726D54706C222C22696672616D6554706C222C';
 wwv_flow_api.g_varchar2_table(17) := '22666F726D222C2264617461222C22707265766965774964222C2270726576696577427574746F6E73222C22707265766965774F7074696F6E73222C2272656D6F7665436C617373222C226F6E222C226F726967696E616C4576656E74222C226F666622';
@@ -1782,7 +1782,5 @@ end;
 /
 set verify on feedback on define on
 prompt  ...done
-
-
 
 
