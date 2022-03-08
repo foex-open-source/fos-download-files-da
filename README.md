@@ -1,6 +1,6 @@
 ## FOS - Download File(s)
 
-![](https://img.shields.io/badge/Plug--in_Type-Dynamic_Action-orange.svg) ![](https://img.shields.io/badge/APEX-19.2-success.svg) ![](https://img.shields.io/badge/APEX-20.1-success.svg) ![](https://img.shields.io/badge/APEX-20.2-success.svg)
+![](https://img.shields.io/badge/Plug--in_Type-Dynamic_Action-orange.svg) ![](https://img.shields.io/badge/APEX-19.2-success.svg) ![](https://img.shields.io/badge/APEX-20.1-success.svg) ![](https://img.shields.io/badge/APEX-20.2-success.svg) ![](https://img.shields.io/badge/APEX-21.1-success.svg) ![](https://img.shields.io/badge/APEX-21.2-success.svg)
 
 Download of database-stored BLOBs and CLOBs with a dynamic action. Multiple files are zipped automatically.
 <h4>Free Plug-in under MIT License</h4>

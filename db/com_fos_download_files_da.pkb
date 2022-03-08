@@ -409,7 +409,7 @@ begin
         then
             if apex_application.g_debug
             then
-                apex_debug.message('%s - BLOB - %s bytes', l_temp_file_name, dbms_lob.getlength(l_temp_blob));
+                apex_debug.info('%s - BLOB - %s bytes', l_temp_file_name, dbms_lob.getlength(l_temp_blob));
             end if;
 
             if l_zipping
@@ -428,7 +428,7 @@ begin
         else
             if apex_application.g_debug
             then
-                apex_debug.message('%s - CLOB - %s bytes', l_temp_file_name, dbms_lob.getlength(l_temp_clob));
+                apex_debug.info('%s - CLOB - %s bytes', l_temp_file_name, dbms_lob.getlength(l_temp_clob));
             end if;
 
             if l_zipping
@@ -544,7 +544,7 @@ as
     l_init_js_fn             varchar2(32767)                    := nvl(apex_plugin_util.replace_substitutions(p_dynamic_action.init_javascript_code), 'undefined');
 
 begin
-    if apex_application.g_debug
+    if apex_application.g_debug and substr(:DEBUG,6) >= 6
     then
         apex_plugin_util.debug_dynamic_action
           ( p_dynamic_action => p_dynamic_action
@@ -637,7 +637,7 @@ as
     end get_preview_url;
 begin
     -- standard debugging intro, but only if necessary
-    if apex_application.g_debug
+    if apex_application.g_debug and substr(:DEBUG,6) >= 6
     then
       apex_plugin_util.debug_dynamic_action
         ( p_plugin         => p_plugin
