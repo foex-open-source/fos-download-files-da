@@ -294,16 +294,11 @@ FOS.utils = window.FOS.utils || {};
 				if (config.previewMode) {
 					(function (win, doc) {
 						var css1 = 'img{ width: ' + Math.max(doc.documentElement.clientWidth || 0, win.innerWidth || 0) + 'px; }',
-							css = 'img{margin-left: auto; margin-right: auto; width: 50%; vertical-align: middle;height: auto;} ' +
-								'span.fos-img-helper{display: inline-block;height: 100%;vertical-align: middle;width: 25%;}',
+							css = 'img{margin-left: auto; margin-right: auto; width: 50%; vertical-align: middle;height: auto;} ',
 							head = doc.head || doc.getElementsByTagName('head')[0],
 							body = doc.body || doc.getElementsByTagName('body')[0],
 							isImage = doc.getElementsByTagName('img').length > 0,
-							style = doc.createElement('style'),
-							span = doc.createElement('span');
-
-						// we need to add a class to make sure any styling we apply is only for this element
-						span.classList.add('fos-img-helper');
+							style = doc.createElement('style');
 
 						if (head) {
 							head.append(style);
@@ -316,8 +311,6 @@ FOS.utils = window.FOS.utils || {};
 								style.appendChild(doc.createTextNode(css));
 							}
 
-							// Add a span tag placeholder to center the image in the middle of the dialog
-							if (isImage) body.prepend(span);
 						}
 					})(win, win.document);
 				}
